@@ -1,9 +1,11 @@
 /* ============================================================
-   folders.js — Folder bertingkat (bisa ada folder di dalam
-   folder), galeri isi folder: foto (dikompres otomatis + bisa
-   diberi catatan), file, catatan teks, daftar tugas yang
-   tertaut, serta Lightbox foto yang dipakai bersama oleh
-   folder & tugas.
+   folders.js — Folder bertingkat + galeri + Lightbox bisa zoom.
+   - Kompres foto otomatis, catatan per foto.
+   - Satu tombol "+ Tambah isi" membuka lembar pilihan
+     (Foto / File / Catatan / Subfolder) — alur lebih sederhana.
+   - Lightbox: zoom pinch (HP), scroll & klik-dua-kali (laptop),
+     geser saat diperbesar, tombol +/−/reset, panah navigasi,
+     catatan foto.
    ============================================================ */
 (function () {
   'use strict';
@@ -24,7 +26,7 @@
     edit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     unduh: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg>',
     file: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
-    tambah: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+    folder: '<svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h4.2a2 2 0 0 1 1.4.6L12.4 8H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'
   };
 
   /* ================= util ================= */
@@ -79,7 +81,7 @@
   /* dipakai juga untuk foto milik tugas (tasks.js) */
   window.kompresFoto = kompresFoto;
 
-  /* ============ Lightbox foto (dipakai folder & tugas) ============ */
+  /* ============ Lightbox foto (folder & tugas) — BISA ZOOM ============ */
 
   var Lightbox = (function () {
     var fotos = [];
@@ -88,7 +90,176 @@
     var segarFn = null;   /* dipanggil setelah catatan foto disimpan */
     var sedangEdit = false;
 
+    /* ---- keadaan zoom ---- */
+    var Z = { skala: 1, x: 0, y: 0 };          /* transform aktif */
+    var SKALA_MIN = 1, SKALA_MAKS = 5;
+    var pointer = {};                           /* pointerId -> posisi terakhir */
+    var gesture = null;                         /* pan / pinch yang sedang berjalan */
+    var tapWaktu = 0, tapX = 0, tapY = 0;       /* deteksi ketuk dua kali */
+
     function kotak() { return document.getElementById('lightbox'); }
+    function imgEl() { return document.getElementById('lb-img'); }
+    function panggungEl() { return document.getElementById('lb-panggung'); }
+
+    /* ---------- transform zoom ---------- */
+
+    function terapkanZoom() {
+      var img = imgEl(), panggung = panggungEl();
+      img.style.transform = 'translate(' + Z.x + 'px, ' + Z.y + 'px) scale(' + Z.skala + ')';
+      var nilai = document.getElementById('lb-zoom-nilai');
+      if (nilai) nilai.textContent = Math.round(Z.skala * 100) + '%';
+      panggung.classList.toggle('diperbesar', Z.skala > 1.01);
+      var tombolReset = document.getElementById('lb-zoom-reset');
+      if (tombolReset) tombolReset.disabled = Z.skala <= 1.01;
+    }
+
+    function resetZoom() {
+      Z.skala = 1; Z.x = 0; Z.y = 0;
+      terapkanZoom();
+    }
+
+    /* batasi geseran supaya foto tidak terbang keluar layar */
+    function batasPan() {
+      var img = imgEl(), panggung = panggungEl();
+      var w = img.offsetWidth || 0, h = img.offsetHeight || 0;
+      var W = panggung.clientWidth || 0, H = panggung.clientHeight || 0;
+      var bx = Math.max(0, (w * Z.skala - W) / 2);
+      var by = Math.max(0, (h * Z.skala - H) / 2);
+      Z.x = Math.max(-bx, Math.min(bx, Z.x));
+      Z.y = Math.max(-by, Math.min(by, Z.y));
+    }
+
+    /* ubah skala dengan titik jangkar (px,py relatif ke tengah panggung) */
+    function setSkala(sBaru, px, py) {
+      sBaru = Math.max(SKALA_MIN, Math.min(SKALA_MAKS, sBaru));
+      if (px == null) { px = 0; py = 0; }
+      Z.x = px - (px - Z.x) * (sBaru / Z.skala);
+      Z.y = py - (py - Z.y) * (sBaru / Z.skala);
+      Z.skala = sBaru;
+      batasPan();
+      terapkanZoom();
+    }
+
+    function titikDariPeristiwa(e) {
+      var r = panggungEl().getBoundingClientRect();
+      return { x: e.clientX - r.left - r.width / 2, y: e.clientY - r.top - r.height / 2 };
+    }
+
+    function toggleZoom(px, py) {
+      if (Z.skala > 1.01) resetZoom();
+      else setSkala(2.5, px, py);
+    }
+
+    function zoomMasuk() { setSkala(Z.skala * 1.3, 0, 0); }
+    function zoomKeluar() { setSkala(Z.skala / 1.3, 0, 0); }
+
+    /* ---------- peristiwa pointer (pan & pinch) ---------- */
+
+    function saatTurun(e) {
+      if (e.target.closest('.lb-zoom') || e.target.closest('.lb-nav')) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      pointer[e.pointerId] = { x: e.clientX, y: e.clientY };
+      imgEl().classList.add('menggeser');   /* matikan transisi saat digerakkan */
+      /* penanda: pointer turun di latar kosong (bukan pada fotonya) */
+      var klikLatar = (e.target === panggungEl());
+      var ids = Object.keys(pointer);
+      if (ids.length === 1) {
+        gesture = {
+          jenis: 'pan', id: e.pointerId,
+          awalX: e.clientX, awalY: e.clientY,
+          mulaiX: Z.x, mulaiY: Z.y, bergerak: false, klikLatar: klikLatar
+        };
+      } else if (ids.length === 2) {
+        var a = pointer[ids[0]], b = pointer[ids[1]];
+        var r = panggungEl().getBoundingClientRect();
+        gesture = {
+          jenis: 'pinch',
+          jarak0: Math.hypot(a.x - b.x, a.y - b.y),
+          mid0X: (a.x + b.x) / 2, mid0Y: (a.y + b.y) / 2,
+          cx: r.left + r.width / 2, cy: r.top + r.height / 2,
+          skala0: Z.skala, x0: Z.x, y0: Z.y
+        };
+      }
+      try { panggungEl().setPointerCapture(e.pointerId); } catch (err) { /* abaikan */ }
+    }
+
+    function saatGerak(e) {
+      if (!pointer[e.pointerId]) return;
+      pointer[e.pointerId].x = e.clientX;
+      pointer[e.pointerId].y = e.clientY;
+      if (!gesture) return;
+
+      if (gesture.jenis === 'pan') {
+        var dx = e.clientX - gesture.awalX;
+        var dy = e.clientY - gesture.awalY;
+        if (Math.abs(dx) + Math.abs(dy) > 6) gesture.bergerak = true;
+        if (Z.skala > 1.01) {
+          Z.x = gesture.mulaiX + dx;
+          Z.y = gesture.mulaiY + dy;
+          batasPan();
+          terapkanZoom();
+        }
+      } else if (gesture.jenis === 'pinch') {
+        var ids = Object.keys(pointer);
+        if (ids.length < 2) return;
+        var a = pointer[ids[0]], b = pointer[ids[1]];
+        var jarak = Math.hypot(a.x - b.x, a.y - b.y);
+        if (jarak <= 0 || gesture.jarak0 <= 0) return;
+        var midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+        var s = Math.max(SKALA_MIN, Math.min(SKALA_MAKS, gesture.skala0 * jarak / gesture.jarak0));
+        /* titik gambar yang tadinya di mid0 dipertahankan di mid sekarang */
+        var vX = (gesture.mid0X - gesture.cx - gesture.x0) / gesture.skala0;
+        var vY = (gesture.mid0Y - gesture.cy - gesture.y0) / gesture.skala0;
+        Z.skala = s;
+        Z.x = (midX - gesture.cx) - vX * s;
+        Z.y = (midY - gesture.cy) - vY * s;
+        batasPan();
+        terapkanZoom();
+      }
+    }
+
+    function saatNaik(e) {
+      if (pointer[e.pointerId]) delete pointer[e.pointerId];
+      var ids = Object.keys(pointer);
+
+      if (gesture && gesture.jenis === 'pan' && gesture.id === e.pointerId) {
+        var gerak = gesture.bergerak;
+        var klikLatar = gesture.klikLatar;
+        gesture = null;
+        /* ketuk / klik di latar kosong sekitar foto -> tutup lightbox.
+           (ditangani di pointerup, bukan click, karena setPointerCapture
+           membuat event click jatuh ke panggung) */
+        if (!gerak && klikLatar) { tutup(); return; }
+        if (!gerak && e.pointerType === 'touch') {
+          /* ketuk satu kali: cek ketuk dua kali -> toggle zoom */
+          var kini = Date.now();
+          if (kini - tapWaktu < 320 && Math.abs(e.clientX - tapX) < 32 && Math.abs(e.clientY - tapY) < 32) {
+            tapWaktu = 0;
+            var t = titikDariPeristiwa(e);
+            toggleZoom(t.x, t.y);
+          } else {
+            tapWaktu = kini; tapX = e.clientX; tapY = e.clientY;
+          }
+        }
+      } else if (gesture && gesture.jenis === 'pinch') {
+        if (ids.length < 2) {
+          gesture = null;
+          if (ids.length === 1) {
+            /* sisa satu jari: lanjut jadi geser dari posisi sekarang */
+            var p = pointer[ids[0]];
+            gesture = {
+              jenis: 'pan', id: Number(ids[0]),
+              awalX: p.x, awalY: p.y,
+              mulaiX: Z.x, mulaiY: Z.y, bergerak: true
+            };
+          }
+        }
+      }
+
+      if (!ids.length) imgEl().classList.remove('menggeser');
+    }
+
+    /* ---------- buka / tampil / tutup ---------- */
 
     function buka(daftar, i, segar) {
       fotos = (daftar || []).filter(function (f) { return f.blob instanceof Blob; });
@@ -98,6 +269,7 @@
       sedangEdit = false;
       document.getElementById('lb-form-catatan').hidden = true;
       kotak().classList.add('buka');
+      document.body.classList.add('terkunci');
       tampil();
     }
 
@@ -106,13 +278,15 @@
       if (!f) { tutup(); return; }
       if (url) URL.revokeObjectURL(url);
       url = URL.createObjectURL(f.blob);
-      var img = document.getElementById('lb-img');
+      var img = imgEl();
+      img.classList.remove('menggeser');
       img.src = url;
       img.alt = f.caption || f.name || 'Foto';
       document.getElementById('lb-nama').textContent = f.name || 'Foto';
       document.getElementById('lb-angka').textContent = (idx + 1) + ' / ' + fotos.length;
       document.getElementById('lb-prev').hidden = fotos.length < 2;
       document.getElementById('lb-next').hidden = fotos.length < 2;
+      resetZoom();
       perbaruiTeksCatatan(f);
     }
 
@@ -170,10 +344,13 @@
       fotos = [];
       segarFn = null;
       sedangEdit = false;
+      gesture = null;
+      pointer = {};
       var k = kotak();
       if (k) k.classList.remove('buka');
       var form = document.getElementById('lb-form-catatan');
       if (form) form.hidden = true;
+      if (!document.querySelector('.modal.buka')) document.body.classList.remove('terkunci');
     }
 
     /* Escape: batalkan edit catatan dulu, baru tutup lightbox */
@@ -186,9 +363,36 @@
       document.getElementById('lb-tutup').addEventListener('click', tutup);
       document.getElementById('lb-prev').addEventListener('click', function () { geser(-1); });
       document.getElementById('lb-next').addEventListener('click', function () { geser(1); });
-      kotak().addEventListener('click', function (e) {
-        if (e.target === kotak()) tutup();
+
+      var panggung = panggungEl();
+
+      /* pan & pinch */
+      panggung.addEventListener('pointerdown', saatTurun);
+      panggung.addEventListener('pointermove', saatGerak);
+      panggung.addEventListener('pointerup', saatNaik);
+      panggung.addEventListener('pointercancel', saatNaik);
+
+      /* klik dua kali (laptop) -> toggle zoom di titik kursor */
+      panggung.addEventListener('dblclick', function (e) {
+        if (e.target.closest('.lb-zoom')) return;
+        var t = titikDariPeristiwa(e);
+        toggleZoom(t.x, t.y);
       });
+
+      /* scroll = zoom (laptop) */
+      panggung.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        var t = titikDariPeristiwa(e);
+        var faktor = e.deltaY < 0 ? 1.13 : 1 / 1.13;
+        setSkala(Z.skala * faktor, t.x, t.y);
+      }, { passive: false });
+
+      /* tombol zoom */
+      document.getElementById('lb-zoom-in').addEventListener('click', zoomMasuk);
+      document.getElementById('lb-zoom-out').addEventListener('click', zoomKeluar);
+      document.getElementById('lb-zoom-reset').addEventListener('click', resetZoom);
+
+      /* catatan foto */
       document.getElementById('lb-edit-btn').addEventListener('click', mulaiEdit);
       document.getElementById('lb-batal-catatan').addEventListener('click', batalEdit);
       document.getElementById('lb-form-catatan').addEventListener('submit', function (e) {
@@ -202,6 +406,9 @@
       geser: geser,
       tutup: tutup,
       tekanEscape: tekanEscape,
+      zoomMasuk: zoomMasuk,
+      zoomKeluar: zoomKeluar,
+      zoomReset: resetZoom,
       pasangEvent: pasangEvent
     };
   })();
@@ -315,14 +522,14 @@
           var nAnak = anakDari(f.id).length;
           var info = [n + ' item'];
           if (nAnak) info.push(nAnak + ' subfolder');
-          if (jumlahTugas[f.id]) info.push(jumlahTugas[f.id] + ' tugas terkait');
+          if (jumlahTugas[f.id]) info.push(jumlahTugas[f.id] + ' tugas');
           kartu.push(
             '<article class="kartu-folder" data-id="' + f.id + '" tabindex="0" role="button" aria-label="Folder ' + esc(f.name) + '">' +
               '<div class="folder-aksi">' +
                 '<button type="button" class="icon-btn icon-kecil" data-aksi="ganti-nama" title="Rename folder" aria-label="Rename folder">' + IKON.edit + '</button>' +
                 '<button type="button" class="icon-btn icon-kecil" data-aksi="hapus-folder" title="Hapus folder" aria-label="Hapus folder">' + IKON.hapus + '</button>' +
               '</div>' +
-              '<span class="ikon-folder" aria-hidden="true">▣</span>' +
+              '<span class="ikon-folder" aria-hidden="true">' + IKON.folder + '</span>' +
               '<h3 class="nama-folder">' + esc(f.name) + '</h3>' +
               '<p class="info-folder">' + info.join(' · ') + '</p>' +
             '</article>');
@@ -362,7 +569,7 @@
     document.getElementById('folder-detail').hidden = false;
   }
 
-  /* remah navigasi: "Semua folder / Induk / Anak" */
+  /* remah navigasi: "Semua folder › Induk › Anak" */
   function htmlRemah(f) {
     var rantai = [];
     var x = f;
@@ -373,7 +580,7 @@
     }
     var html = '<button type="button" class="remah-item" data-remah="">Semua folder</button>';
     rantai.forEach(function (r, i) {
-      html += '<span class="remah-pisah" aria-hidden="true">/</span>';
+      html += '<span class="remah-pisah" aria-hidden="true">›</span>';
       if (i === rantai.length - 1) {
         html += '<span class="remah-item remah-ini" aria-current="page">' + esc(r.name) + '</span>';
       } else {
@@ -415,8 +622,7 @@
       var html = '';
 
       /* subfolder */
-      html += '<section class="seksi"><h3>Subfolder <span class="jumlah">' + anak.length + '</span>' +
-        '<button type="button" class="btn btn-kecil" data-aksi="tambah-subfolder" title="Buat subfolder di dalam folder ini">' + IKON.tambah + 'Subfolder</button></h3>' +
+      html += '<section class="seksi"><h3>Subfolder <span class="jumlah">' + anak.length + '</span></h3>' +
         (anak.length
           ? '<div class="folder-grid grid-anak">' + anak.map(function (a) {
               var nCucu = anakDari(a.id).length;
@@ -427,7 +633,7 @@
                   '<button type="button" class="icon-btn icon-kecil" data-aksi="ganti-nama" title="Rename subfolder" aria-label="Rename subfolder">' + IKON.edit + '</button>' +
                   '<button type="button" class="icon-btn icon-kecil" data-aksi="hapus-folder" title="Hapus subfolder" aria-label="Hapus subfolder">' + IKON.hapus + '</button>' +
                 '</div>' +
-                '<span class="ikon-folder" aria-hidden="true">▣</span>' +
+                '<span class="ikon-folder" aria-hidden="true">' + IKON.folder + '</span>' +
                 '<h4 class="nama-folder">' + esc(a.name) + '</h4>' +
                 '<p class="info-folder">' + info.join(' · ') + '</p>' +
               '</article>';
@@ -449,7 +655,7 @@
           '</div></section>';
       }
 
-      /* foto (bisa diberi catatan) */
+      /* foto (bisa di-zoom & diberi catatan) */
       html += '<section class="seksi"><h3>Foto <span class="jumlah">' + fotos.length + '</span></h3>' +
         (fotos.length
           ? '<div class="galeri">' + fotos.map(function (f2, i) {
@@ -459,8 +665,8 @@
                 '<button type="button" class="hapus-galeri" data-aksi="hapus-item" data-id="' + f2.id + '" title="Hapus foto" aria-label="Hapus foto">✕</button>' +
                 '</figure>';
             }).join('') + '</div>' +
-            '<p class="petunjuk-galeri">Klik foto untuk membesarkan sekaligus memberi catatan.</p>'
-          : '<p class="teks-kosong-kecil">Belum ada foto. Tombol <b>Foto</b> mengunggah gambar (dikompres otomatis biar hemat penyimpanan).</p>') +
+            '<p class="petunjuk-galeri">Ketuk foto untuk memperbesar, zoom (cubit / scroll), dan memberi catatan.</p>'
+          : '<p class="teks-kosong-kecil">Belum ada foto. Tekan <b>Tambah isi</b> lalu pilih <b>Foto</b> — gambar dikompres otomatis biar hemat tempat.</p>') +
         '</section>';
 
       /* file */
@@ -474,7 +680,7 @@
                 '<button type="button" class="icon-btn icon-kecil" data-aksi="hapus-item" data-id="' + fl.id + '" title="Hapus file" aria-label="Hapus file">' + IKON.hapus + '</button>' +
                 '</div>';
             }).join('') + '</div>'
-          : '<p class="teks-kosong-kecil">Belum ada file. Tombol <b>File</b> untuk menyimpan PDF, dokumen, dsb.</p>') +
+          : '<p class="teks-kosong-kecil">Belum ada file. Tekan <b>Tambah isi</b> lalu pilih <b>File</b> untuk menyimpan PDF, dokumen, dsb.</p>') +
         '</section>';
 
       /* catatan teks */
@@ -492,13 +698,21 @@
                 '<p class="teks-catatan">' + esc(ct.text) + '</p>' +
                 '</div>';
             }).join('') + '</div>'
-          : '<p class="teks-kosong-kecil">Belum ada catatan. Tombol <b>Catatan</b> untuk menulis catatan teks.</p>') +
+          : '<p class="teks-kosong-kecil">Belum ada catatan. Tekan <b>Tambah isi</b> lalu pilih <b>Catatan</b>.</p>') +
         '</section>';
 
       document.getElementById('folder-isi').innerHTML = html;
       /* revoke object URL lama SETELAH DOM baru terpasang (agar tidak kedip) */
       kolamURL.splice(0, nURLLama).forEach(function (u) { URL.revokeObjectURL(u); });
     });
+  }
+
+  /* ================= lembar "Tambah isi" ================= */
+
+  function bukaTambahIsi() {
+    if (!state.aktif) return;
+    document.getElementById('ti-lokasi').textContent = 'Di dalam: ' + jalurNama(state.aktif.id);
+    bukaModal(document.getElementById('modal-tambah-isi'));
   }
 
   /* ================= tambah isi folder ================= */
@@ -737,6 +951,20 @@
       else tampilkanBeranda();
     });
 
+    /* lembar "Tambah isi": satu pintu untuk foto/file/catatan/subfolder */
+    document.getElementById('btn-tambah-isi').addEventListener('click', bukaTambahIsi);
+    var modalTI = document.getElementById('modal-tambah-isi');
+    modalTI.addEventListener('click', function (e) {
+      var el = e.target.closest ? e.target.closest('[data-aksi]') : null;
+      if (!el) return;
+      var aksi = el.dataset.aksi;
+      tutupModal(modalTI);
+      if (aksi === 'tambah-foto') document.getElementById('berkas-foto').click();
+      else if (aksi === 'tambah-file') document.getElementById('berkas-file').click();
+      else if (aksi === 'tambah-catatan') bukaModalCatatan(null);
+      else if (aksi === 'tambah-subfolder' && state.aktif) bukaFormFolder(null, state.aktif.id);
+    });
+
     /* isi folder: subfolder, galeri, file, catatan, tugas terkait */
     var folderIsi = document.getElementById('folder-isi');
     folderIsi.addEventListener('click', function (e) {
@@ -750,7 +978,6 @@
           return;
         }
         if (aksi === 'buka-tugas') { Tasks.bukaDetail(el.dataset.id); return; }
-        if (aksi === 'tambah-subfolder') { if (state.aktif) bukaFormFolder(null, state.aktif.id); return; }
         if (aksi === 'ganti-nama') {
           var kartuNama = el.closest('.kartu-folder');
           if (kartuNama) bukaFormFolder(cari(kartuNama.dataset.id));
@@ -790,13 +1017,6 @@
     document.getElementById('btn-hapus-folder').addEventListener('click', function () {
       if (state.aktif) konfirmasiHapusFolder(state.aktif.id);
     });
-    document.getElementById('btn-tambah-foto').addEventListener('click', function () {
-      document.getElementById('berkas-foto').click();
-    });
-    document.getElementById('btn-tambah-file').addEventListener('click', function () {
-      document.getElementById('berkas-file').click();
-    });
-    document.getElementById('btn-tambah-catatan').addEventListener('click', function () { bukaModalCatatan(null); });
     document.getElementById('berkas-foto').addEventListener('change', function (e) {
       tambahDariBerkas(Array.prototype.slice.call(e.target.files || []));
       e.target.value = '';
@@ -823,6 +1043,12 @@
     pasangEvent: pasangEvent,
     jalurNama: jalurNama,
     pilihanBertingkat: pilihanBertingkat,
+    /* aksi tombol ⊕ (FAB) di tab Folder: dalam folder -> lembar tambah isi,
+       di beranda -> form folder baru */
+    fabAksi: function () {
+      if (state.aktif) bukaTambahIsi();
+      else bukaFormFolder(null);
+    },
     segarkan: function () {
       if (state.aktif) return buka(state.aktif.id);
       return renderBeranda();

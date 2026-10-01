@@ -1,23 +1,24 @@
 /* ============================================================
-   tasks.js — Logika tugas: tambah/edit/hapus, ubah status,
-   checklist sub-tugas + progress otomatis, urut otomatis
-   berdasarkan deadline, penanda telat, filter & pencarian,
-   render daftar tugas, panel detail, dan foto milik tugas
-   (unggah / lihat / beri catatan / hapus).
+   tasks.js — Logika tugas (versi dirapikan):
+   - Form ringkas: judul + deadline (chip cepat), opsi lain
+     (mapel/kategori/prioritas/folder/catatan) dilipat.
+   - Kartu tugas dengan blok tenggat jelas di kanan.
+   - Checklist + progress otomatis, urut deadline, telat.
+   - Cari + filter status (kategori cukup lewat pencarian).
+   - Panel detail + foto milik tugas.
    ============================================================ */
 (function () {
   'use strict';
 
   var NAMA_BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   var NAMA_HARI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-  var KATEGORI_AWAL = ['PR', 'UKK', 'TKA', 'PKL', 'Tugas', 'Ujian', 'Proyek', 'Lainnya'];
   var SIMBOL_STATUS = { belum: '○', proses: '◐', selesai: '●' };
   var LABEL_STATUS = { belum: 'Belum', proses: 'Proses', selesai: 'Selesai' };
   var TANDA_PRIORITAS = { 1: '!', 2: '!!', 3: '!!!' };
   var LABEL_PRIORITAS = { 1: 'Rendah', 2: 'Sedang', 3: 'Tinggi' };
   var URUTAN_STATUS = ['belum', 'proses', 'selesai'];
 
-  var state = { daftar: [], fotoTugas: [], filter: { q: '', status: 'semua', kategori: 'semua' } };
+  var state = { daftar: [], fotoTugas: [], filter: { q: '', status: 'semua' } };
   var detailAktif = null;   /* id tugas yang sedang dibuka di panel detail */
   var editDariDetail = false;
 
@@ -34,7 +35,8 @@
     while (kolamURLTugas.length) URL.revokeObjectURL(kolamURLTugas.pop());
   }
 
-  /* ikon tombol unggah foto di panel detail */
+  /* ikon untuk konten yang dirender lewat JS */
+  var IKON_KALENDER = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>';
   var IKON_FOTO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10.5" r="1.7"/><path d="m6 17 3.5-3.5 3 3 2.5-2.5 4 4"/></svg>';
 
   /* ================= util ================= */
@@ -54,6 +56,14 @@
     return Math.round((jatuhTempo - kini) / 86400000);
   }
 
+  /* tanggal ISO dari hari ini + n hari (untuk chip cepat) */
+  function isoHariIni(n) {
+    var d = new Date();
+    d.setDate(d.getDate() + (n || 0));
+    function p(v) { return String(v).padStart(2, '0'); }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
   function formatTanggal(iso) {
     if (!iso) return '';
     var p = iso.split('-').map(Number);
@@ -61,6 +71,14 @@
     var hasil = NAMA_HARI[dt.getDay()] + ', ' + p[2] + ' ' + NAMA_BULAN[p[1] - 1];
     if (p[0] !== new Date().getFullYear()) hasil += ' ' + p[0];
     return hasil;
+  }
+
+  function formatTanggalPendek(iso) {
+    if (!iso) return '';
+    var p = iso.split('-').map(Number);
+    var teks = p[2] + ' ' + NAMA_BULAN[p[1] - 1];
+    if (p[0] !== new Date().getFullYear()) teks += ' ' + p[0];
+    return teks;
   }
 
   function isTelat(t) {
@@ -86,7 +104,6 @@
 
   function namaFolder(id) {
     if (!id || !window.Folders || !Folders.jalurNama) return '';
-    /* tampilkan jalur lengkap: "Induk / Anak" */
     return Folders.jalurNama(id);
   }
 
@@ -160,7 +177,6 @@
       if (state.filter.status === 'aktif' && t.status === 'selesai') return false;
       if (state.filter.status !== 'semua' && state.filter.status !== 'aktif' &&
           t.status !== state.filter.status) return false;
-      if (state.filter.kategori !== 'semua' && (t.kategori || '') !== state.filter.kategori) return false;
       if (q) {
         var teks = (t.title + ' ' + t.mapel + ' ' + t.kategori + ' ' + t.catatan + ' ' +
           (t.checklist || []).map(function (c) { return c.text; }).join(' ')).toLowerCase();
@@ -172,35 +188,30 @@
 
   /* ================= render daftar ================= */
 
-  function isiFilterKategori() {
-    var sel = document.getElementById('filter-kategori');
-    var dipakai = [];
-    state.daftar.forEach(function (t) {
-      if (t.kategori && dipakai.indexOf(t.kategori) === -1) dipakai.push(t.kategori);
-    });
-    KATEGORI_AWAL.forEach(function (k) {
-      if (dipakai.indexOf(k) === -1) dipakai.push(k);
-    });
-    dipakai.sort(function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
-    var pilihan = ['<option value="semua">Semua kategori</option>'].concat(dipakai.map(function (k) {
-      return '<option value="' + esc(k) + '">' + esc(k) + '</option>';
-    }));
-    var sebelumnya = state.filter.kategori;
-    sel.innerHTML = pilihan.join('');
-    if (sebelumnya !== 'semua' && dipakai.indexOf(sebelumnya) === -1) state.filter.kategori = 'semua';
-    sel.value = state.filter.kategori;
-  }
-
   function kartuTugas(t) {
     var p = progres(t);
     var telat = isTelat(t);
     var folder = t.folderId ? namaFolder(t.folderId) : '';
+    var label = labelWaktu(t);
+    var penting = telat || label === 'hari ini';
+
     var meta = [];
     if (t.mapel) meta.push('<span>' + esc(t.mapel) + '</span>');
     if (t.kategori) meta.push('<span class="chip">' + esc(t.kategori) + '</span>');
     if (folder) meta.push('<span class="tanda-folder" title="Tertaut ke folder">▣ ' + esc(folder) + '</span>');
-    meta.push('<span class="waktu' + (telat ? ' waktu-telat' : '') + '">' +
-      (t.deadline ? esc(formatTanggal(t.deadline)) + ' · ' + esc(labelWaktu(t)) : 'tanpa deadline') + '</span>');
+
+    /* blok tenggat di kanan kartu */
+    var kelasLabel = t.status === 'selesai' ? ' redup' : (penting ? ' pil-is' : '');
+    var tenggat;
+    if (t.deadline) {
+      tenggat = '<div class="tenggat' + (telat ? ' telat' : '') + '">' +
+        '<span class="tg-tanggal' + (t.status === 'selesai' ? ' redup' : '') + '">' + esc(formatTanggalPendek(t.deadline)) + '</span>' +
+        '<span class="tg-label' + kelasLabel + '">' + esc(label) + '</span>' +
+      '</div>';
+    } else {
+      tenggat = '<div class="tenggat"><span class="tg-tanggal redup">—</span>' +
+        '<span class="tg-label redup">tanpa tenggat</span></div>';
+    }
 
     return '' +
       '<article class="kartu-tugas ' + t.status + '" data-id="' + t.id + '" tabindex="0" role="button" aria-label="' + esc(t.title) + '">' +
@@ -208,19 +219,18 @@
         '<div class="badan-tugas">' +
           '<div class="atas-tugas">' +
             '<h3 class="judul-tugas">' + esc(t.title) + '</h3>' +
-            (t.prioritas ? '<span class="prioritas p' + t.prioritas + '" title="Prioritas ' + esc(LABEL_PRIORITAS[t.prioritas]) + '">' + TANDA_PRIORITAS[t.prioritas] + '</span>' : '') +
-            (telat ? '<span class="lencana-telat">Telat</span>' : '') +
+            (t.prioritas === 3 ? '<span class="prioritas p3" title="Prioritas tinggi">!!!</span>' : '') +
+            (t.prioritas === 1 ? '<span class="prioritas p1" title="Prioritas rendah">!</span>' : '') +
           '</div>' +
           (meta.length ? '<div class="meta-tugas">' + meta.join('<span class="titik-meta">·</span>') + '</div>' : '') +
           (p ? '<div class="progress"><div class="isi-progress" style="width:' + p.persen + '%"></div></div>' +
               '<div class="teks-progress">' + p.selesai + '/' + p.total + ' sub-tugas' + (p.persen === 100 ? ' · lengkap' : '') + '</div>' : '') +
         '</div>' +
-        '<span class="panah" aria-hidden="true">›</span>' +
+        tenggat +
       '</article>';
   }
 
   function render() {
-    isiFilterKategori();
     var wadah = document.getElementById('daftar-tugas');
     var kosong = document.getElementById('kosong-tugas');
     var hasil = urutkan(hasilFilter());
@@ -230,8 +240,8 @@
       var adaData = state.daftar.length > 0;
       kosong.querySelector('.judul-kosong').textContent = adaData ? 'Tidak ada yang cocok' : 'Belum ada tugas';
       kosong.querySelector('.teks-kosong').innerHTML = adaData
-        ? 'Coba ubah kata kunci pencarian atau filternya.'
-        : 'Klik tombol <b>+ Tugas</b> untuk mencatat kerjaan pertamamu.';
+        ? 'Coba ubah kata kunci pencarian atau filter statusnya.'
+        : 'Tekan tombol <b>+ Tugas</b> untuk mencatat kerjaan pertamamu.';
       return;
     }
     kosong.hidden = true;
@@ -239,6 +249,13 @@
   }
 
   /* ================= form tugas ================= */
+
+  function perbaruiChipDeadline() {
+    var nilai = document.getElementById('f-deadline').value;
+    document.querySelectorAll('#f-chip-deadline button').forEach(function (b) {
+      b.classList.toggle('aktif', !!nilai && nilai === isoHariIni(Number(b.dataset.hari)));
+    });
+  }
 
   function bukaForm(id, dariDetail) {
     editDariDetail = !!dariDetail;
@@ -253,6 +270,11 @@
     document.getElementById('f-catatan').value = t.catatan || '';
     var radio = document.querySelector('input[name="prioritas"][value="' + (t.prioritas || 2) + '"]');
     if (radio) radio.checked = true;
+
+    /* lipatan "opsi lainnya": buka otomatis saat edit jika ada isinya */
+    var adaOpsi = !!(t.mapel || t.kategori || t.catatan || t.folderId || (t.prioritas && t.prioritas !== 2));
+    document.getElementById('f-opsi-lain').open = !!id && adaOpsi;
+    perbaruiChipDeadline();
 
     /* isi pilihan folder (selalu segar, dengan jalur bertingkat) */
     var sel = document.getElementById('f-folder');
@@ -344,10 +366,6 @@
     bersihkanURLTugas();
   }
 
-  function barisMeta(label, isiHtml) {
-    return '<div><dt>' + label + '</dt><dd>' + (isiHtml || '—') + '</dd></div>';
-  }
-
   function itemChecklist(c) {
     return '<li class="item-check' + (c.done ? ' selesai' : '') + '" data-id="' + c.id + '">' +
       '<button type="button" class="kotak-ceklis" data-aksi="ceklis" aria-label="' + (c.done ? 'Batalkan' : 'Tandai selesai') + '" title="' + (c.done ? 'Batalkan' : 'Tandai selesai') + '">' + (c.done ? '✓' : '') + '</button>' +
@@ -368,6 +386,13 @@
     var folder = t.folderId ? namaFolder(t.folderId) : '';
     var pohon = (window.Folders && Folders.pilihanBertingkat) ? Folders.pilihanBertingkat() : [];
     var fotos = state.fotoTugas;
+    var label = labelWaktu(t);
+    var penting = telat || label === 'hari ini';
+
+    var chips = [];
+    if (t.mapel) chips.push('<span class="pil">' + esc(t.mapel) + '</span>');
+    if (t.kategori) chips.push('<span class="pil">' + esc(t.kategori) + '</span>');
+    if (t.prioritas) chips.push('<span class="pil">' + TANDA_PRIORITAS[t.prioritas] + ' ' + LABEL_PRIORITAS[t.prioritas] + '</span>');
 
     var html = '' +
     '<div class="segmen-status" role="group" aria-label="Status tugas">' +
@@ -377,14 +402,12 @@
       }).join('') +
     '</div>' +
 
-    '<dl class="kisi-meta">' +
-      barisMeta('Mapel', t.mapel ? esc(t.mapel) : '') +
-      barisMeta('Kategori', t.kategori ? '<span class="chip">' + esc(t.kategori) + '</span>' : '') +
-      barisMeta('Deadline', t.deadline
-        ? esc(formatTanggal(t.deadline)) + ' <span class="teks-waktu">(' + esc(labelWaktu(t)) + ')</span>' + (telat ? ' <span class="lencana-telat">Telat</span>' : '')
-        : '—') +
-      barisMeta('Prioritas', t.prioritas ? esc(TANDA_PRIORITAS[t.prioritas]) + ' ' + esc(LABEL_PRIORITAS[t.prioritas]) : '—') +
-    '</dl>' +
+    '<div class="detail-tenggat' + (telat ? ' telat' : '') + '">' + IKON_KALENDER +
+      '<span class="dt-tanggal">' + (t.deadline ? esc(formatTanggal(t.deadline)) : 'Tanpa deadline') + '</span>' +
+      (t.deadline ? '<span class="pil' + (penting ? ' pil-is' : '') + '">' + esc(label) + '</span>' : '') +
+    '</div>' +
+
+    (chips.length ? '<div class="chip-baris">' + chips.join('') + '</div>' : '') +
 
     '<section class="seksi">' +
       '<h3>Checklist' + (p ? ' <span class="jumlah">' + p.selesai + '/' + p.total + '</span>' : '') + '</h3>' +
@@ -409,8 +432,8 @@
               '<button type="button" class="hapus-galeri" data-aksi="hapus-foto-tugas" data-id="' + f2.id + '" title="Hapus foto" aria-label="Hapus foto">✕</button>' +
               '</figure>';
           }).join('') + '</div>' +
-          '<p class="petunjuk-galeri">Klik foto untuk membesarkan sekaligus memberi catatan.</p>'
-        : '<p class="teks-kosong-kecil">Belum ada foto untuk tugas ini — mis. foto soal, papan tulis, atau hasil kerja. Foto dikompres otomatis.</p>') +
+          '<p class="petunjuk-galeri">Ketuk foto untuk memperbesar, zoom, dan memberi catatan.</p>'
+        : '<p class="teks-kosong-kecil">Belum ada foto — mis. foto soal, papan tulis, atau hasil kerja. Foto dikompres otomatis.</p>') +
     '</section>' +
 
     '<section class="seksi">' +
@@ -598,7 +621,7 @@
         }
         return;
       }
-      /* klik ubin galeri foto -> lightbox (bisa beri catatan) */
+      /* klik ubin galeri foto -> lightbox (zoom + catatan) */
       var fig = e.target.closest ? e.target.closest('.item-galeri') : null;
       if (fig && detailAktif) {
         Lightbox.buka(state.fotoTugas, Number(fig.dataset.idx), renderDetail);
@@ -631,6 +654,15 @@
       tambahFotoTugas(Array.prototype.slice.call(e.target.files || []));
       e.target.value = '';
     });
+
+    /* chip deadline cepat */
+    document.getElementById('f-chip-deadline').addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-hari]') : null;
+      if (!b) return;
+      document.getElementById('f-deadline').value = isoHariIni(Number(b.dataset.hari));
+      perbaruiChipDeadline();
+    });
+    document.getElementById('f-deadline').addEventListener('change', perbaruiChipDeadline);
 
     formTugas.addEventListener('submit', kirimForm);
   }

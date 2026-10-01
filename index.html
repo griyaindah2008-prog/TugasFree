@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Pengatur Tugas</title>
   <meta name="description" content="Pengatur tugas pribadi: tugas, checklist, folder foto & file, catatan. Data tersimpan di browser.">
-  <meta name="theme-color" content="#ffffff">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23fff'/%3E%3Ccircle cx='50' cy='50' r='34' fill='%23111'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#f7f7f5">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23111'/%3E%3Cpath d='M30 52l14 14 26-28' stroke='%23fff' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <script>
     /* Terapkan tema sebelum halaman dirender supaya tidak berkedip */
     try {
@@ -23,19 +23,34 @@
       <h1 class="brand"><span class="titik" aria-hidden="true">●</span>Pengatur Tugas</h1>
       <div class="aksi-atas">
         <button type="button" class="icon-btn" id="btn-tema" title="Mode terang / gelap" aria-label="Mode terang atau gelap">◐</button>
-        <button type="button" class="icon-btn" id="btn-export" title="Export backup — simpan semua data jadi 1 file" aria-label="Export backup">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg>
-        </button>
-        <button type="button" class="icon-btn" id="btn-import" title="Import backup — pulihkan data dari file" aria-label="Import backup">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V5"/><path d="m8 8 4-4 4 4"/><path d="M5 20h14"/></svg>
-        </button>
+        <div class="menu-wadah">
+          <button type="button" class="icon-btn" id="btn-menu" title="Menu data (export / import backup)" aria-label="Menu data" aria-haspopup="true" aria-expanded="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+          </button>
+          <div class="menu" id="menu-data" hidden>
+            <button type="button" class="menu-btn" id="menu-export">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg>
+              <span><b>Export backup</b><small>Simpan semua data jadi 1 file</small></span>
+            </button>
+            <button type="button" class="menu-btn" id="menu-import">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V5"/><path d="m8 8 4-4 4 4"/><path d="M5 20h14"/></svg>
+              <span><b>Import backup</b><small>Pulihkan data dari file backup</small></span>
+            </button>
+          </div>
+        </div>
         <input type="file" id="berkas-import" accept=".json,application/json" hidden>
       </div>
     </div>
     <div class="wadah topbar-nav">
       <nav class="tabs" aria-label="Bagian utama">
-        <button type="button" class="tab aktif" data-tab="tugas">Tugas</button>
-        <button type="button" class="tab" data-tab="folder">Folder</button>
+        <button type="button" class="tab aktif" data-tab="tugas">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5L16 9.5"/></svg>
+          Tugas
+        </button>
+        <button type="button" class="tab" data-tab="folder">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h4.2a2 2 0 0 1 1.4.6L12.4 8H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          Folder
+        </button>
       </nav>
     </div>
   </header>
@@ -47,29 +62,26 @@
       <div class="toolbar">
         <div class="cari">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input type="search" id="input-cari" placeholder="Cari judul, mapel, kategori, catatan…" aria-label="Cari tugas">
+          <input type="search" id="input-cari" placeholder="Cari tugas, mapel, kategori…" aria-label="Cari tugas">
         </div>
         <select class="filter" id="filter-status" aria-label="Filter status">
-          <option value="semua">Semua status</option>
+          <option value="semua">Semua</option>
           <option value="aktif">Belum selesai</option>
           <option value="belum">○ Belum</option>
           <option value="proses">◐ Proses</option>
           <option value="selesai">● Selesai</option>
         </select>
-        <select class="filter" id="filter-kategori" aria-label="Filter kategori">
-          <option value="semua">Semua kategori</option>
-        </select>
         <button type="button" class="btn btn-utama" id="btn-tambah-tugas">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           Tugas
         </button>
       </div>
-      <p class="info-urut">Urut otomatis: deadline terdekat dulu · tugas selesai turun ke bawah</p>
+      <p class="info-urut">Urut otomatis: deadline terdekat dulu · yang selesai turun ke bawah</p>
       <div id="daftar-tugas" class="daftar-tugas"></div>
       <div id="kosong-tugas" class="kosong-tampil" hidden>
         <span class="simbol" aria-hidden="true">○</span>
         <p class="judul-kosong">Belum ada tugas</p>
-        <p class="teks-kosong">Klik tombol <b>+ Tugas</b> untuk mencatat kerjaan pertamamu.</p>
+        <p class="teks-kosong">Tekan tombol <b>+ Tugas</b> untuk mencatat kerjaan pertamamu.</p>
       </div>
     </section>
 
@@ -78,11 +90,11 @@
       <div id="folder-beranda">
         <div class="toolbar">
           <button type="button" class="btn btn-utama" id="btn-tambah-folder">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             Folder
           </button>
         </div>
-        <p class="info-urut">Buat folder per mapel atau keperluan — isi dengan foto, file, dan catatan teks. Folder juga bisa punya subfolder di dalamnya.</p>
+        <p class="info-urut">Satu folder per mapel atau keperluan — isi dengan foto, file, catatan, atau subfolder.</p>
         <div id="daftar-folder" class="folder-grid"></div>
         <div id="kosong-folder" class="kosong-tampil" hidden>
           <span class="simbol" aria-hidden="true">▣</span>
@@ -105,17 +117,9 @@
           </div>
         </div>
         <div class="toolbar toolbar-folder">
-          <button type="button" class="btn" id="btn-tambah-foto">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10.5" r="1.7"/><path d="m6 17 3.5-3.5 3 3 2.5-2.5 4 4"/></svg>
-            Foto
-          </button>
-          <button type="button" class="btn" id="btn-tambah-file">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
-            File
-          </button>
-          <button type="button" class="btn" id="btn-tambah-catatan">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
-            Catatan
+          <button type="button" class="btn btn-utama" id="btn-tambah-isi">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Tambah isi
           </button>
           <input type="file" id="berkas-foto" accept="image/*" multiple hidden>
           <input type="file" id="berkas-file" multiple hidden>
@@ -127,7 +131,7 @@
 
   <!-- ===================== KAKI ===================== -->
   <footer class="kaki">
-    <p>Data tersimpan di browser perangkat ini (IndexedDB) — foto di laptop <b>tidak otomatis</b> muncul di HP. Rutin tekan <b>Export</b> untuk menyimpan backup, dan <b>Import</b> untuk memulihkannya di perangkat lain.</p>
+    <p>Data tersimpan di browser perangkat ini (IndexedDB) — tidak otomatis ikut ke HP/lainnya. Rutin <b>Export backup</b> lewat menu <b>⋯</b> di kanan atas, lalu <b>Import</b> di perangkat lain.</p>
   </footer>
 
   <!-- ===================== MODAL: FORM TUGAS ===================== -->
@@ -140,42 +144,55 @@
         </button>
       </header>
       <form id="form-tugas" class="modal-form" novalidate>
-        <label class="field">
-          <span>Judul <em>*</em></span>
+        <label class="field field-judul">
+          <span>Judul tugas <em>*</em></span>
           <input type="text" id="f-judul" maxlength="120" placeholder="mis. Kerjakan latihan bab 3" autocomplete="off">
         </label>
-        <div class="baris-2">
-          <label class="field">
-            <span>Mapel</span>
-            <input type="text" id="f-mapel" list="dl-mapel" placeholder="mis. Bahasa Inggris" autocomplete="off">
-          </label>
-          <label class="field">
-            <span>Kategori</span>
-            <input type="text" id="f-kategori" list="dl-kategori" placeholder="PR / UKK / TKA…" autocomplete="off">
-          </label>
-        </div>
-        <div class="baris-2">
-          <label class="field">
-            <span>Deadline</span>
-            <input type="date" id="f-deadline">
-          </label>
-          <label class="field">
-            <span>Tautkan ke folder</span>
-            <select id="f-folder"><option value="">— tanpa folder —</option></select>
-          </label>
-        </div>
-        <fieldset class="field field-prioritas">
-          <span>Prioritas</span>
-          <div class="segmen" role="radiogroup" aria-label="Prioritas">
-            <label><input type="radio" name="prioritas" value="1"><span>! Rendah</span></label>
-            <label><input type="radio" name="prioritas" value="2" checked><span>!! Sedang</span></label>
-            <label><input type="radio" name="prioritas" value="3"><span>!!! Tinggi</span></label>
+        <div class="field">
+          <span>Deadline</span>
+          <input type="date" id="f-deadline">
+          <div class="chip-cepat" id="f-chip-deadline">
+            <button type="button" data-hari="0">Hari ini</button>
+            <button type="button" data-hari="1">Besok</button>
+            <button type="button" data-hari="2">Lusa</button>
+            <button type="button" data-hari="7">Minggu depan</button>
           </div>
-        </fieldset>
-        <label class="field">
-          <span>Catatan detail</span>
-          <textarea id="f-catatan" rows="3" placeholder="Detail tugas, nomor soal, keterangan, dsb."></textarea>
-        </label>
+        </div>
+        <details class="opsi-lain" id="f-opsi-lain">
+          <summary>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Opsi lainnya
+            <span class="ringkas">mapel · kategori · prioritas · folder · catatan</span>
+          </summary>
+          <div class="opsi-isi">
+            <div class="baris-2">
+              <label class="field">
+                <span>Mapel</span>
+                <input type="text" id="f-mapel" list="dl-mapel" placeholder="mis. Bahasa Inggris" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Kategori</span>
+                <input type="text" id="f-kategori" list="dl-kategori" placeholder="PR / UKK / TKA…" autocomplete="off">
+              </label>
+            </div>
+            <fieldset class="field field-prioritas">
+              <span>Prioritas</span>
+              <div class="segmen" role="radiogroup" aria-label="Prioritas">
+                <label><input type="radio" name="prioritas" value="1"><span>! Rendah</span></label>
+                <label><input type="radio" name="prioritas" value="2" checked><span>!! Sedang</span></label>
+                <label><input type="radio" name="prioritas" value="3"><span>!!! Tinggi</span></label>
+              </div>
+            </fieldset>
+            <label class="field">
+              <span>Tautkan ke folder</span>
+              <select id="f-folder"><option value="">— tanpa folder —</option></select>
+            </label>
+            <label class="field">
+              <span>Catatan detail</span>
+              <textarea id="f-catatan" rows="3" placeholder="Detail tugas, nomor soal, keterangan, dsb."></textarea>
+            </label>
+          </div>
+        </details>
         <footer class="kaki-form">
           <button type="button" class="btn" data-tutup>Batal</button>
           <button type="submit" class="btn btn-utama">Simpan</button>
@@ -198,7 +215,7 @@
     </div>
   </div>
 
-  <!-- ===================== MODAL: FOLDER (BARU / RENAME) ===================== -->
+  <!-- ===================== MODAL: FOLDER (BARU / RENAME / SUBFOLDER) ===================== -->
   <div class="modal" id="modal-folder" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="folder-form-judul">
     <div class="modal-panel modal-kecil">
       <header class="modal-kepala">
@@ -247,6 +264,39 @@
     </div>
   </div>
 
+  <!-- ===================== MODAL: TAMBAH ISI FOLDER ===================== -->
+  <div class="modal" id="modal-tambah-isi" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="ti-judul">
+    <div class="modal-panel modal-kecil">
+      <header class="modal-kepala">
+        <h2 class="judul-modal" id="ti-judul">Tambah isi folder</h2>
+        <button type="button" class="icon-btn" data-tutup aria-label="Tutup">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div class="modal-form">
+        <p class="info-form" id="ti-lokasi"></p>
+        <div class="tambah-grid">
+          <button type="button" class="tambah-opsi" data-aksi="tambah-foto">
+            <span class="to-ikon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10.5" r="1.7"/><path d="m6 17 3.5-3.5 3 3 2.5-2.5 4 4"/></svg></span>
+            <span class="to-badan"><b>Foto</b><small>Dikompres otomatis biar hemat tempat</small></span>
+          </button>
+          <button type="button" class="tambah-opsi" data-aksi="tambah-file">
+            <span class="to-ikon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></span>
+            <span class="to-badan"><b>File</b><small>PDF, dokumen, presentasi, dll.</small></span>
+          </button>
+          <button type="button" class="tambah-opsi" data-aksi="tambah-catatan">
+            <span class="to-ikon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>
+            <span class="to-badan"><b>Catatan</b><small>Tulis catatan teks singkat</small></span>
+          </button>
+          <button type="button" class="tambah-opsi" data-aksi="tambah-subfolder">
+            <span class="to-ikon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h4.2a2 2 0 0 1 1.4.6L12.4 8H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11.5v5M9.5 14h5"/></svg></span>
+            <span class="to-badan"><b>Subfolder</b><small>Folder di dalam folder ini</small></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== MODAL: KONFIRMASI ===================== -->
   <div class="modal" id="modal-konfirmasi" role="alertdialog" aria-modal="true" aria-hidden="true" aria-labelledby="k-judul">
     <div class="modal-panel modal-kecil">
@@ -261,16 +311,33 @@
     </div>
   </div>
 
-  <!-- ===================== LIGHTBOX FOTO (FOLDER & TUGAS) ===================== -->
+  <!-- ===================== LIGHTBOX FOTO (FOLDER & TUGAS) — bisa di-zoom ===================== -->
   <div id="lightbox" class="lightbox" aria-hidden="true">
-    <button type="button" class="lb-tutup icon-btn" id="lb-tutup" aria-label="Tutup">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
+    <div class="lb-atas">
+      <span id="lb-nama" class="lb-nama"></span>
+      <span id="lb-angka" class="lb-angka"></span>
+      <button type="button" class="lb-tutup icon-btn" id="lb-tutup" aria-label="Tutup">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
     <button type="button" class="lb-nav lb-prev" id="lb-prev" aria-label="Foto sebelumnya">‹</button>
     <button type="button" class="lb-nav lb-next" id="lb-next" aria-label="Foto berikutnya">›</button>
     <figure>
-      <img id="lb-img" alt="">
-      <figcaption><span id="lb-nama"></span><span id="lb-angka"></span></figcaption>
+      <div class="lb-panggung" id="lb-panggung">
+        <img id="lb-img" alt="" draggable="false">
+        <div class="lb-zoom" id="lb-zoom">
+          <button type="button" id="lb-zoom-out" title="Perkecil (tombol −)" aria-label="Perkecil foto">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/><path d="M8 11h6"/></svg>
+          </button>
+          <span id="lb-zoom-nilai">100%</span>
+          <button type="button" id="lb-zoom-in" title="Perbesar (tombol +)" aria-label="Perbesar foto">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/><path d="M11 8v6M8 11h6"/></svg>
+          </button>
+          <button type="button" id="lb-zoom-reset" title="Ukuran asli (tombol 0)" aria-label="Kembalikan ukuran asli">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/></svg>
+          </button>
+        </div>
+      </div>
       <div class="lb-catatan">
         <p id="lb-teks-catatan" hidden></p>
         <form id="lb-form-catatan" hidden>
@@ -290,6 +357,21 @@
 
   <!-- ===================== TOAST ===================== -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ===================== NAV BAWAH + FAB (khusus HP) ===================== -->
+  <nav class="nav-bawah" aria-label="Bagian utama">
+    <button type="button" class="nb-item aktif" data-tab="tugas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5L16 9.5"/></svg>
+      <span>Tugas</span>
+    </button>
+    <button type="button" class="nb-item" data-tab="folder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h4.2a2 2 0 0 1 1.4.6L12.4 8H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span>Folder</span>
+    </button>
+  </nav>
+  <button type="button" class="fab" id="btn-fab" aria-label="Tambah">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
 
   <!-- ===================== SARAN INPUT ===================== -->
   <datalist id="dl-mapel">

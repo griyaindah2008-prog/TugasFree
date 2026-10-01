@@ -1,7 +1,9 @@
 /* ============================================================
-   app.js — Penghubung seluruh aplikasi:
-   inisialisasi, pindah tab, modal, toast, dialog konfirmasi,
-   tema terang/gelap, pencarian & filter, tombol backup.
+   app.js — Penghubung seluruh aplikasi (versi dirapikan):
+   inisialisasi, tab (atas + nav bawah di HP), FAB ⊕ kontekstual,
+   menu ⋯ (export/import backup), modal, toast, konfirmasi,
+   tema, pencarian & filter, tombol keyboard (escape, panah,
+   +/−/0 untuk zoom foto).
    ============================================================ */
 (function () {
   'use strict';
@@ -58,15 +60,31 @@
     });
   }
 
+  /* ================= menu data (⋯) ================= */
+
+  function menuData() { return document.getElementById('menu-data'); }
+
+  function bukaMenu() {
+    menuData().hidden = false;
+    document.getElementById('btn-menu').setAttribute('aria-expanded', 'true');
+  }
+
+  function tutupMenu() {
+    menuData().hidden = true;
+    document.getElementById('btn-menu').setAttribute('aria-expanded', 'false');
+  }
+
   /* ================= tab ================= */
 
   function pindahTab(t) {
     tabAktif = t;
     document.getElementById('lihat-tugas').hidden = t !== 'tugas';
     document.getElementById('lihat-folder').hidden = t !== 'folder';
-    document.querySelectorAll('.tab').forEach(function (b) {
+    /* sinkronkan tab atas (desktop) + nav bawah (HP) */
+    document.querySelectorAll('[data-tab]').forEach(function (b) {
       b.classList.toggle('aktif', b.dataset.tab === t);
     });
+    tutupMenu();
     if (t === 'folder' && window.Folders) Folders.segarkan();
   }
 
@@ -125,8 +143,8 @@
   }
 
   function pasangEventGlobal() {
-    /* tab */
-    document.querySelectorAll('.tab').forEach(function (b) {
+    /* tab atas (desktop) + nav bawah (HP) — keduanya punya data-tab */
+    document.querySelectorAll('[data-tab]').forEach(function (b) {
       b.addEventListener('click', function () { pindahTab(b.dataset.tab); });
     });
 
@@ -135,10 +153,28 @@
       Tasks.bukaForm(null, false);
     });
     document.getElementById('btn-tema').addEventListener('click', gantiTema);
-    document.getElementById('btn-export').addEventListener('click', function () {
+
+    /* FAB ⊕ (HP): tugas baru di tab Tugas; folder/isi di tab Folder */
+    document.getElementById('btn-fab').addEventListener('click', function () {
+      if (tabAktif === 'tugas') { Tasks.bukaForm(null, false); return; }
+      if (window.Folders) Folders.fabAksi();
+    });
+
+    /* menu ⋯ : export / import backup */
+    var btnMenu = document.getElementById('btn-menu');
+    btnMenu.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (menuData().hidden) bukaMenu(); else tutupMenu();
+    });
+    document.addEventListener('click', function (e) {
+      if (!menuData().hidden && !e.target.closest('.menu-wadah')) tutupMenu();
+    });
+    document.getElementById('menu-export').addEventListener('click', function () {
+      tutupMenu();
       Backup.exportSemua();
     });
-    document.getElementById('btn-import').addEventListener('click', function () {
+    document.getElementById('menu-import').addEventListener('click', function () {
+      tutupMenu();
       document.getElementById('berkas-import').click();
     });
     document.getElementById('berkas-import').addEventListener('change', function (e) {
@@ -147,7 +183,7 @@
       e.target.value = '';
     });
 
-    /* pencarian (dengan jeda kecil) & filter */
+    /* pencarian (dengan jeda kecil) & filter status */
     var cari = document.getElementById('input-cari');
     cari.addEventListener('input', function () {
       clearTimeout(timerCari);
@@ -158,10 +194,6 @@
     });
     document.getElementById('filter-status').addEventListener('change', function (e) {
       Tasks.state.filter.status = e.target.value;
-      Tasks.render();
-    });
-    document.getElementById('filter-kategori').addEventListener('change', function (e) {
-      Tasks.state.filter.kategori = e.target.value;
       Tasks.render();
     });
 
@@ -182,12 +214,13 @@
       });
     });
 
-    /* tombol keyboard: Escape & panah (lightbox) */
+    /* tombol keyboard: Escape, panah, dan zoom (+/−/0) */
     document.addEventListener('keydown', function (e) {
       var lb = document.getElementById('lightbox');
       var lbTerbuka = lb.classList.contains('buka');
       if (e.key === 'Escape') {
         if (lbTerbuka) { Lightbox.tekanEscape(); return; }
+        if (!menuData().hidden) { tutupMenu(); return; }
         if (tumpukanModal.length) {
           var atas = tumpukanModal[tumpukanModal.length - 1];
           if (atas.id === 'modal-konfirmasi') {
@@ -201,6 +234,9 @@
       if (lbTerbuka) {
         if (e.key === 'ArrowLeft') Lightbox.geser(-1);
         else if (e.key === 'ArrowRight') Lightbox.geser(1);
+        else if (e.key === '+' || e.key === '=') Lightbox.zoomMasuk();
+        else if (e.key === '-' || e.key === '_') Lightbox.zoomKeluar();
+        else if (e.key === '0') Lightbox.zoomReset();
       }
     });
   }
