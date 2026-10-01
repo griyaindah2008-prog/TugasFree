@@ -206,9 +206,54 @@ main.wadah { flex: 1; padding-top: 10px; padding-bottom: 36px; }
 @media (hover: none) { .folder-aksi { opacity: 1; } }
 
 .folder-kepala { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.remah + .folder-kepala { margin-top: 4px; }
 .folder-kepala h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; overflow-wrap: anywhere; }
 .folder-kepala-aksi { display: flex; gap: 4px; flex-shrink: 0; }
 .toolbar-folder { margin-top: 14px; }
+
+/* ---------- remah (breadcrumb) folder ---------- */
+.remah {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
+  margin-top: 16px; font-size: 13px; min-width: 0;
+}
+.remah-item {
+  color: var(--redup); font-weight: 600; padding: 2px 6px;
+  border-radius: 6px; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+button.remah-item:hover { color: var(--teks); background: var(--track); }
+.remah-ini { color: var(--teks); font-weight: 700; }
+.remah-pisah { color: var(--redup); opacity: .55; }
+
+/* tombol kecil di baris judul seksi (Subfolder / Unggah) */
+.seksi h3 .btn {
+  margin-left: auto; height: 28px; padding: 0 10px;
+  font-size: 12px; gap: 5px;
+  text-transform: none; letter-spacing: normal;
+}
+
+/* kartu subfolder di dalam detail folder */
+.grid-anak { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.kartu-anak { padding: 13px 12px 11px; }
+.kartu-anak .ikon-folder { font-size: 18px; margin-bottom: 6px; }
+.kartu-anak .nama-folder { font-size: 13.5px; }
+.kartu-anak .info-folder { font-size: 11.5px; margin-top: 4px; }
+
+/* catatan foto: lapisan di ubin galeri */
+.caption-galeri {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 16px 7px 5px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .78));
+  color: #fff; font-size: 10.5px; line-height: 1.35; font-weight: 600;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; pointer-events: none;
+}
+
+/* info kecil di form (mis. lokasi subfolder baru) */
+.info-form { font-size: 12.5px; color: var(--redup); margin: -4px 0 14px; }
+
+/* petunjuk kecil di bawah galeri */
+.petunjuk-galeri { font-size: 11.5px; color: var(--redup); margin-top: 8px; }
 
 /* seksi di dalam detail folder & tugas */
 .seksi { margin-top: 22px; }
@@ -388,13 +433,53 @@ html.gelap .modal { background: rgba(0, 0, 0, .62); }
   display: none; align-items: center; justify-content: center;
 }
 .lightbox.buka { display: flex; }
-.lightbox figure { max-width: 92vw; text-align: center; }
-.lightbox img { max-width: 92vw; max-height: 80dvh; object-fit: contain; margin: 0 auto; border-radius: 4px; }
+.lightbox figure {
+  max-width: 92vw; text-align: center;
+  max-height: 96dvh; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center;
+}
+.lightbox img { max-width: 92vw; max-height: 68dvh; object-fit: contain; margin: 0 auto; border-radius: 4px; }
 .lightbox figcaption {
   display: flex; align-items: center; justify-content: center; gap: 14px;
   color: #eee; font-size: 13px; margin-top: 12px;
 }
 .lightbox figcaption span:first-child { overflow-wrap: anywhere; }
+
+/* area catatan foto di lightbox */
+.lb-catatan {
+  width: 100%; max-width: min(680px, 88vw);
+  margin-top: 10px; text-align: center;
+}
+#lb-teks-catatan {
+  color: #e8e8e8; font-size: 13.5px; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  text-align: left; max-height: 6.2em; overflow-y: auto;
+}
+.lb-edit-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  color: #ccc; font-size: 12.5px; font-weight: 600;
+  padding: 6px 14px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  margin-top: 8px;
+}
+.lb-edit-btn:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+#lb-form-catatan { text-align: left; }
+#lb-form-catatan textarea {
+  width: 100%; background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .3); color: #fff;
+  border-radius: 8px; padding: 8px 11px; font: inherit; font-size: 14px;
+  resize: vertical; outline: none; max-height: 26dvh;
+}
+#lb-form-catatan textarea:focus { border-color: rgba(255, 255, 255, .65); }
+.lb-form-aksi { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.lb-btn {
+  border: 1px solid rgba(255, 255, 255, .4); color: #fff;
+  border-radius: 8px; height: 32px; padding: 0 14px;
+  font-weight: 600; font-size: 13px;
+}
+.lb-btn:hover { background: rgba(255, 255, 255, .12); }
+.lb-btn-utama { background: #fff; color: #111; border-color: #fff; }
+.lb-btn-utama:hover { opacity: .85; background: #fff; }
 .lb-tutup { position: absolute; top: 14px; right: 14px; color: #fff; }
 .lb-tutup:hover { background: rgba(255, 255, 255, .14); }
 .lb-nav {
@@ -452,4 +537,8 @@ html.gelap .modal { background: rgba(0, 0, 0, .62); }
 
   .kaki p { padding: 14px 16px 18px; }
   .lb-nav { padding: 20px 10px; }
+  .remah { font-size: 12.5px; margin-top: 12px; }
+  .remah-item { max-width: 150px; }
+  .lb-catatan { margin-top: 6px; }
+  #lb-form-catatan textarea { font-size: 16px; }
 }

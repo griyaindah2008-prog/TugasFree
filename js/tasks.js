@@ -2,7 +2,8 @@
    tasks.js — Logika tugas: tambah/edit/hapus, ubah status,
    checklist sub-tugas + progress otomatis, urut otomatis
    berdasarkan deadline, penanda telat, filter & pencarian,
-   render daftar tugas dan panel detail.
+   render daftar tugas, panel detail, dan foto milik tugas
+   (unggah / lihat / beri catatan / hapus).
    ============================================================ */
 (function () {
   'use strict';
@@ -16,11 +17,25 @@
   var LABEL_PRIORITAS = { 1: 'Rendah', 2: 'Sedang', 3: 'Tinggi' };
   var URUTAN_STATUS = ['belum', 'proses', 'selesai'];
 
-  var state = { daftar: [], filter: { q: '', status: 'semua', kategori: 'semua' } };
+  var state = { daftar: [], fotoTugas: [], filter: { q: '', status: 'semua', kategori: 'semua' } };
   var detailAktif = null;   /* id tugas yang sedang dibuka di panel detail */
   var editDariDetail = false;
 
   var formTugas = document.getElementById('form-tugas');
+
+  var kolamURLTugas = [];   /* object URL foto tugas agar bisa direvoke */
+
+  function urlTugas(blob) {
+    var u = URL.createObjectURL(blob);
+    kolamURLTugas.push(u);
+    return u;
+  }
+  function bersihkanURLTugas() {
+    while (kolamURLTugas.length) URL.revokeObjectURL(kolamURLTugas.pop());
+  }
+
+  /* ikon tombol unggah foto di panel detail */
+  var IKON_FOTO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10.5" r="1.7"/><path d="m6 17 3.5-3.5 3 3 2.5-2.5 4 4"/></svg>';
 
   /* ================= util ================= */
 
@@ -70,9 +85,9 @@
   }
 
   function namaFolder(id) {
-    if (!id || !window.Folders) return '';
-    var f = Folders.cari(id);
-    return f ? f.name : '';
+    if (!id || !window.Folders || !Folders.jalurNama) return '';
+    /* tampilkan jalur lengkap: "Induk / Anak" */
+    return Folders.jalurNama(id);
   }
 
   /* ================= data ================= */
@@ -111,7 +126,14 @@
   }
 
   function hapus(id) {
-    return DB.hapus('tasks', id).then(function () {
+    /* hapus juga foto-foto milik tugas ini */
+    return DB.berdasarkanTugas('items', id).then(function (fotos) {
+      return fotos.reduce(function (janji, f) {
+        return janji.then(function () { return DB.hapus('items', f.id); });
+      }, Promise.resolve());
+    }).then(function () {
+      return DB.hapus('tasks', id);
+    }).then(function () {
       state.daftar = state.daftar.filter(function (t) { return t.id !== id; });
     });
   }
@@ -232,11 +254,12 @@
     var radio = document.querySelector('input[name="prioritas"][value="' + (t.prioritas || 2) + '"]');
     if (radio) radio.checked = true;
 
-    /* isi pilihan folder (selalu segar) */
+    /* isi pilihan folder (selalu segar, dengan jalur bertingkat) */
     var sel = document.getElementById('f-folder');
-    var daftarFolder = window.Folders ? Folders.daftar() : [];
-    var opsi = ['<option value="">— tanpa folder —</option>'].concat(daftarFolder.map(function (f) {
-      return '<option value="' + f.id + '"' + (t.folderId === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>';
+    var pohon = (window.Folders && Folders.pilihanBertingkat) ? Folders.pilihanBertingkat() : [];
+    var opsi = ['<option value="">— tanpa folder —</option>'].concat(pohon.map(function (f) {
+      return '<option value="' + f.id + '"' + (t.folderId === f.id ? ' selected' : '') + '>' +
+        esc(Folders.jalurNama(f.id)) + '</option>';
     }));
     sel.innerHTML = opsi.join('');
 
@@ -295,16 +318,31 @@
   function bukaDetail(id) {
     if (!cari(id)) return;
     detailAktif = id;
-    renderDetail();
-    bukaModal(document.getElementById('modal-detail'));
+    /* muat foto milik tugas ini sebelum menampilkan panel */
+    DB.berdasarkanTugas('items', id).then(function (hasil) {
+      state.fotoTugas = hasil.filter(function (i) { return i.type === 'foto'; })
+        .sort(function (a, b) { return b.createdAt - a.createdAt; });
+      renderDetail();
+      bukaModal(document.getElementById('modal-detail'));
+    }).catch(function () {
+      state.fotoTugas = [];
+      renderDetail();
+      bukaModal(document.getElementById('modal-detail'));
+    });
   }
 
   function tutupDetail() {
     detailAktif = null;
+    state.fotoTugas = [];
+    bersihkanURLTugas();
     tutupModal(document.getElementById('modal-detail'));
   }
 
-  function detailDitutup() { detailAktif = null; }
+  function detailDitutup() {
+    detailAktif = null;
+    state.fotoTugas = [];
+    bersihkanURLTugas();
+  }
 
   function barisMeta(label, isiHtml) {
     return '<div><dt>' + label + '</dt><dd>' + (isiHtml || '—') + '</dd></div>';
@@ -319,6 +357,7 @@
   }
 
   function renderDetail() {
+    bersihkanURLTugas();
     var t = detailAktif ? cari(detailAktif) : null;
     document.getElementById('d-judul').textContent = t ? t.title : '';
     var wadah = document.getElementById('d-isi');
@@ -327,7 +366,8 @@
     var p = progres(t);
     var telat = isTelat(t);
     var folder = t.folderId ? namaFolder(t.folderId) : '';
-    var daftarFolder = window.Folders ? Folders.daftar() : [];
+    var pohon = (window.Folders && Folders.pilihanBertingkat) ? Folders.pilihanBertingkat() : [];
+    var fotos = state.fotoTugas;
 
     var html = '' +
     '<div class="segmen-status" role="group" aria-label="Status tugas">' +
@@ -359,6 +399,21 @@
     '</section>' +
 
     '<section class="seksi">' +
+      '<h3>Foto <span class="jumlah">' + fotos.length + '</span>' +
+        '<button type="button" class="btn btn-kecil" data-aksi="unggah-foto-tugas" title="Unggah foto untuk tugas ini">' + IKON_FOTO + 'Unggah</button></h3>' +
+      (fotos.length
+        ? '<div class="galeri">' + fotos.map(function (f2, i) {
+            return '<figure class="item-galeri" data-idx="' + i + '" role="button" tabindex="0" aria-label="Lihat foto ' + esc(f2.caption || f2.name || 'foto') + '">' +
+              '<img src="' + urlTugas(f2.blob) + '" alt="' + esc(f2.caption || f2.name || 'Foto') + '" loading="lazy">' +
+              (f2.caption ? '<span class="caption-galeri">' + esc(f2.caption) + '</span>' : '') +
+              '<button type="button" class="hapus-galeri" data-aksi="hapus-foto-tugas" data-id="' + f2.id + '" title="Hapus foto" aria-label="Hapus foto">✕</button>' +
+              '</figure>';
+          }).join('') + '</div>' +
+          '<p class="petunjuk-galeri">Klik foto untuk membesarkan sekaligus memberi catatan.</p>'
+        : '<p class="teks-kosong-kecil">Belum ada foto untuk tugas ini — mis. foto soal, papan tulis, atau hasil kerja. Foto dikompres otomatis.</p>') +
+    '</section>' +
+
+    '<section class="seksi">' +
       '<h3>Catatan</h3>' +
       (t.catatan ? '<p class="teks-catatan">' + esc(t.catatan) + '</p>' : '<p class="teks-kosong-kecil">Belum ada catatan.</p>') +
     '</section>' +
@@ -370,8 +425,8 @@
             '<button type="button" class="btn btn-kecil" data-aksi="buka-folder" data-id="' + t.folderId + '">Buka folder</button></div>'
         : '<select class="pilih-folder" data-aksi="pilih-folder" aria-label="Tautkan tugas ke folder">' +
             '<option value="">— tautkan ke folder… —</option>' +
-            daftarFolder.map(function (f) {
-              return '<option value="' + f.id + '">' + esc(f.name) + '</option>';
+            pohon.map(function (f) {
+              return '<option value="' + f.id + '">' + esc(Folders.jalurNama(f.id)) + '</option>';
             }).join('') +
           '</select>') +
     '</section>' +
@@ -419,6 +474,61 @@
     });
   }
 
+  /* ================= foto tugas ================= */
+
+  function tambahFotoTugas(daftarBerkas) {
+    var t = detailAktif ? cari(detailAktif) : null;
+    if (!t || !daftarBerkas.length) return Promise.resolve();
+    toast(daftarBerkas.length > 1 ? 'Memproses ' + daftarBerkas.length + ' foto…' : 'Memproses foto…');
+    return daftarBerkas.reduce(function (janji, b) {
+      return janji.then(function () {
+        return window.kompresFoto(b).then(function (hasil) {
+          var nama = b.name || 'foto.jpg';
+          if (hasil.berubah) nama = nama.replace(/\.[^.]+$/, '') + '.jpg';
+          var item = {
+            id: uid(),
+            folderId: '',
+            taskId: t.id,
+            type: 'foto',
+            name: nama,
+            mime: hasil.blob.type || b.type || '',
+            size: hasil.blob.size,
+            blob: hasil.blob,
+            text: '',
+            caption: '',
+            createdAt: Date.now()
+          };
+          state.fotoTugas.push(item);
+          return DB.simpan('items', item);
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      renderDetail();
+      toast(daftarBerkas.length + ' foto ditambahkan ke tugas.');
+    }).catch(function (e) {
+      renderDetail();
+      toast('Gagal mengunggah foto: ' + (e && e.message ? e.message : e));
+    });
+  }
+
+  function konfirmasiHapusFotoTugas(id) {
+    var it = state.fotoTugas.find(function (f) { return f.id === id; });
+    if (!it) return Promise.resolve();
+    var nama = it.caption || it.name || 'foto';
+    return konfirmasi({
+      judul: 'Hapus foto?',
+      pesan: 'Foto “' + nama + '” beserta catatannya akan dihapus permanen dari tugas ini.',
+      ya: 'Hapus'
+    }).then(function (ok) {
+      if (!ok) return;
+      return DB.hapus('items', id).then(function () {
+        state.fotoTugas = state.fotoTugas.filter(function (f) { return f.id !== id; });
+        renderDetail();
+        toast('Foto dihapus.');
+      });
+    });
+  }
+
   /* ================= tautan folder ================= */
 
   function tautkanFolder(tid, fid) {
@@ -439,7 +549,7 @@
     if (!t) return Promise.resolve();
     return konfirmasi({
       judul: 'Hapus tugas?',
-      pesan: '“' + t.title + '” beserta checklist dan catatannya akan dihapus permanen.',
+      pesan: '“' + t.title + '” beserta checklist, catatan, dan foto-fotonya akan dihapus permanen.',
       ya: 'Hapus'
     }).then(function (ok) {
       if (!ok) return;
@@ -473,16 +583,33 @@
     var dIsi = document.getElementById('d-isi');
     dIsi.addEventListener('click', function (e) {
       var el = e.target.closest ? e.target.closest('[data-aksi]') : null;
-      if (!el || !detailAktif) return;
-      var aksi = el.dataset.aksi;
-      if (aksi === 'set-status') ubahStatus(detailAktif, el.dataset.status);
-      else if (aksi === 'ceklis') putarChecklist(el.closest('.item-check').dataset.id);
-      else if (aksi === 'hapus-check') hapusChecklist(el.closest('.item-check').dataset.id);
-      else if (aksi === 'edit') bukaForm(detailAktif, true);
-      else if (aksi === 'hapus') konfirmasiHapus(detailAktif);
-      else if (aksi === 'buka-folder') {
-        tutupDetail();
-        App.bukaFolderTab(el.dataset.id);
+      if (el && detailAktif) {
+        var aksi = el.dataset.aksi;
+        if (aksi === 'set-status') ubahStatus(detailAktif, el.dataset.status);
+        else if (aksi === 'ceklis') putarChecklist(el.closest('.item-check').dataset.id);
+        else if (aksi === 'hapus-check') hapusChecklist(el.closest('.item-check').dataset.id);
+        else if (aksi === 'edit') bukaForm(detailAktif, true);
+        else if (aksi === 'hapus') konfirmasiHapus(detailAktif);
+        else if (aksi === 'unggah-foto-tugas') document.getElementById('berkas-foto-tugas').click();
+        else if (aksi === 'hapus-foto-tugas') konfirmasiHapusFotoTugas(el.dataset.id);
+        else if (aksi === 'buka-folder') {
+          tutupDetail();
+          App.bukaFolderTab(el.dataset.id);
+        }
+        return;
+      }
+      /* klik ubin galeri foto -> lightbox (bisa beri catatan) */
+      var fig = e.target.closest ? e.target.closest('.item-galeri') : null;
+      if (fig && detailAktif) {
+        Lightbox.buka(state.fotoTugas, Number(fig.dataset.idx), renderDetail);
+      }
+    });
+    dIsi.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var fig = e.target.closest ? e.target.closest('.item-galeri') : null;
+      if (fig && e.target === fig && detailAktif) {
+        e.preventDefault();
+        Lightbox.buka(state.fotoTugas, Number(fig.dataset.idx), renderDetail);
       }
     });
     dIsi.addEventListener('submit', function (e) {
@@ -497,6 +624,12 @@
       if (e.target.dataset && e.target.dataset.aksi === 'pilih-folder') {
         tautkanFolder(detailAktif, e.target.value);
       }
+    });
+
+    /* input file foto tugas (dipicu tombol Unggah di panel detail) */
+    document.getElementById('berkas-foto-tugas').addEventListener('change', function (e) {
+      tambahFotoTugas(Array.prototype.slice.call(e.target.files || []));
+      e.target.value = '';
     });
 
     formTugas.addEventListener('submit', kirimForm);

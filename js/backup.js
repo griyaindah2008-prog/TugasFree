@@ -1,7 +1,8 @@
 /* ============================================================
    backup.js — Export & import backup.
-   Export: seluruh data (tugas + folder + isi folder termasuk
-   foto & file) dibungkus jadi SATU file JSON yang bisa diunduh.
+   Export: seluruh data (tugas + foto tugas + folder bertingkat
+   + isi folder termasuk foto & catatan fotonya) dibungkus jadi
+   SATU file JSON yang bisa diunduh.
    Import: baca file backup itu, lalu ganti seluruh data saat ini.
    ============================================================ */
 (function () {
@@ -81,7 +82,7 @@
       });
       var paket = {
         app: 'tugas-app',
-        versi: 1,
+        versi: 2,
         waktu: new Date().toISOString(),
         jumlah: { tugas: tasks.length, folder: folders.length, item: items.length },
         tasks: tasks,

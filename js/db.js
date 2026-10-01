@@ -2,15 +2,17 @@
    db.js — Lapisan penyimpanan IndexedDB.
    Database "tugas-app" berisi 3 object store:
    - tasks  : data tugas (keyPath "id"), checklist tertanam di objek
-   - folders: data folder buatan sendiri (keyPath "id")
+   - folders: folder bertingkat (keyPath "id", field "parentId"
+              menunjuk ke folder induknya)
    - items  : isi folder — foto / file / catatan (keyPath "id",
-              index "folderId" untuk ambil isi per folder)
+              index "folderId" untuk ambil isi per folder) dan
+              foto milik tugas (index "taskId")
    ============================================================ */
 (function () {
   'use strict';
 
   var NAMA_DB = 'tugas-app';
-  var VERSI_DB = 1;
+  var VERSI_DB = 2;
   var dbJanji = null;
 
   function bukaDB() {
@@ -28,6 +30,16 @@
         if (!db.objectStoreNames.contains('items')) {
           var items = db.createObjectStore('items', { keyPath: 'id' });
           items.createIndex('folderId', 'folderId', { unique: false });
+          items.createIndex('taskId', 'taskId', { unique: false });
+        } else if (req.transaction) {
+          /* database lama (v1): tambahkan index taskId untuk foto tugas */
+          var os = req.transaction.objectStore('items');
+          if (!os.indexNames.contains('folderId')) {
+            os.createIndex('folderId', 'folderId', { unique: false });
+          }
+          if (!os.indexNames.contains('taskId')) {
+            os.createIndex('taskId', 'taskId', { unique: false });
+          }
         }
       };
       req.onsuccess = function () { selesai(req.result); };
@@ -96,6 +108,12 @@
     hitungFolder: function (store, idFolder) {
       return jalankan(store, 'readonly', function (s) {
         return s.index('folderId').count(idFolder);
+      });
+    },
+    /* semua foto milik satu tugas (via index taskId) */
+    berdasarkanTugas: function (store, idTugas) {
+      return jalankan(store, 'readonly', function (s) {
+        return s.index('taskId').getAll(idTugas);
       });
     },
     simpanBanyak: simpanBanyak

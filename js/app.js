@@ -187,7 +187,7 @@
       var lb = document.getElementById('lightbox');
       var lbTerbuka = lb.classList.contains('buka');
       if (e.key === 'Escape') {
-        if (lbTerbuka) { Folders.tutupLightbox(); return; }
+        if (lbTerbuka) { Lightbox.tekanEscape(); return; }
         if (tumpukanModal.length) {
           var atas = tumpukanModal[tumpukanModal.length - 1];
           if (atas.id === 'modal-konfirmasi') {
@@ -199,8 +199,8 @@
         return;
       }
       if (lbTerbuka) {
-        if (e.key === 'ArrowLeft') Folders.geserLightbox(-1);
-        else if (e.key === 'ArrowRight') Folders.geserLightbox(1);
+        if (e.key === 'ArrowLeft') Lightbox.geser(-1);
+        else if (e.key === 'ArrowRight') Lightbox.geser(1);
       }
     });
   }
