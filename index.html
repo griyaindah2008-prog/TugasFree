@@ -47,6 +47,10 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5L16 9.5"/></svg>
           Tugas
         </button>
+        <button type="button" class="tab" data-tab="catatan">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76V7h6v3.76a2 2 0 0 0 1.11 1.79l1.78.9A2 2 0 0 1 19 15.24V17H5v-1.76a2 2 0 0 1 1.11-1.79l1.78-.9A2 2 0 0 0 9 10.76Z"/><path d="M9 7h6"/></svg>
+          Catatan
+        </button>
         <button type="button" class="tab" data-tab="folder">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h4.2a2 2 0 0 1 1.4.6L12.4 8H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
           Folder
@@ -59,6 +63,13 @@
 
     <!-- ===================== BAGIAN TUGAS ===================== -->
     <section id="lihat-tugas" class="lihat" aria-label="Daftar tugas">
+
+      <!-- foto utama (mis. jadwal pelajaran) — tampil besar di halaman depan -->
+      <section class="hero" id="hero-foto" aria-label="Foto utama">
+        <div id="hero-isi"></div>
+        <input type="file" id="berkas-foto-utama" accept="image/*" hidden>
+      </section>
+
       <div class="toolbar">
         <div class="cari">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -82,6 +93,27 @@
         <span class="simbol" aria-hidden="true">○</span>
         <p class="judul-kosong">Belum ada tugas</p>
         <p class="teks-kosong">Tekan tombol <b>+ Tugas</b> untuk mencatat kerjaan pertamamu.</p>
+      </div>
+    </section>
+
+    <!-- ===================== BAGIAN CATATAN (tab khusus) ===================== -->
+    <section id="lihat-catatan" class="lihat" hidden aria-label="Catatan">
+      <div class="toolbar">
+        <div class="cari">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="input-cari-catatan" placeholder="Cari catatan…" aria-label="Cari catatan">
+        </div>
+        <button type="button" class="btn btn-utama" id="btn-tambah-catatan">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Catatan
+        </button>
+      </div>
+      <p class="info-urut">Yang di-pin tampil paling atas · sisanya terbaru dulu. Tanggal di tiap kartu = kapan catatan itu dibuat.</p>
+      <div id="daftar-catatan"></div>
+      <div id="kosong-catatan" class="kosong-tampil" hidden>
+        <span class="simbol" aria-hidden="true">✎</span>
+        <p class="judul-kosong">Belum ada catatan</p>
+        <p class="teks-kosong">Tekan tombol <b>+ Catatan</b> untuk menyimpan catatan pertamamu — bisa di-pin biar gampang dicari.</p>
       </div>
     </section>
 
@@ -297,6 +329,33 @@
     </div>
   </div>
 
+  <!-- ===================== MODAL: CATATAN LEPAS (TAB CATATAN) ===================== -->
+  <div class="modal" id="modal-note" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="note-form-judul">
+    <div class="modal-panel modal-kecil">
+      <header class="modal-kepala">
+        <h2 class="judul-modal" id="note-form-judul">Catatan Baru</h2>
+        <button type="button" class="icon-btn" data-tutup aria-label="Tutup">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <form id="form-note" class="modal-form" novalidate>
+        <label class="field">
+          <span>Judul <span class="opsional">(opsional)</span></span>
+          <input type="text" id="n-judul" maxlength="80" placeholder="mis. Jadwal les · rumus penting" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Isi catatan <em>*</em></span>
+          <textarea id="n-isi" rows="7" placeholder="Tulis catatan di sini…"></textarea>
+        </label>
+        <p class="info-form" id="n-info" hidden></p>
+        <footer class="kaki-form">
+          <button type="button" class="btn" data-tutup>Batal</button>
+          <button type="submit" class="btn btn-utama">Simpan</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
   <!-- ===================== MODAL: KONFIRMASI ===================== -->
   <div class="modal" id="modal-konfirmasi" role="alertdialog" aria-modal="true" aria-hidden="true" aria-labelledby="k-judul">
     <div class="modal-panel modal-kecil">
@@ -364,6 +423,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5L16 9.5"/></svg>
       <span>Tugas</span>
     </button>
+    <button type="button" class="nb-item" data-tab="catatan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76V7h6v3.76a2 2 0 0 0 1.11 1.79l1.78.9A2 2 0 0 1 19 15.24V17H5v-1.76a2 2 0 0 1 1.11-1.79l1.78-.9A2 2 0 0 0 9 10.76Z"/><path d="M9 7h6"/></svg>
+      <span>Catatan</span>
+    </button>
     <button type="button" class="nb-item" data-tab="folder">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h4.2a2 2 0 0 1 1.4.6L12.4 8H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
       <span>Folder</span>
@@ -406,6 +469,8 @@
   <script src="js/db.js"></script>
   <script src="js/tasks.js"></script>
   <script src="js/folders.js"></script>
+  <script src="js/hero.js"></script>
+  <script src="js/notes.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/app.js"></script>
 </body>

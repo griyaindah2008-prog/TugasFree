@@ -1,9 +1,10 @@
 /* ============================================================
    app.js — Penghubung seluruh aplikasi (versi dirapikan):
-   inisialisasi, tab (atas + nav bawah di HP), FAB ⊕ kontekstual,
-   menu ⋯ (export/import backup), modal, toast, konfirmasi,
-   tema, pencarian & filter, tombol keyboard (escape, panah,
-   +/−/0 untuk zoom foto).
+   inisialisasi, 3 tab (atas + nav bawah di HP): Tugas / Catatan /
+   Folder, FAB ⊕ kontekstual, menu ⋯ (export/import backup), modal,
+   toast, konfirmasi, tema, pencarian & filter, tombol keyboard
+   (escape, panah, +/−/0 untuk zoom foto), foto utama halaman
+   depan (Hero), catatan lepas dengan pin (Notes).
    ============================================================ */
 (function () {
   'use strict';
@@ -79,6 +80,7 @@
   function pindahTab(t) {
     tabAktif = t;
     document.getElementById('lihat-tugas').hidden = t !== 'tugas';
+    document.getElementById('lihat-catatan').hidden = t !== 'catatan';
     document.getElementById('lihat-folder').hidden = t !== 'folder';
     /* sinkronkan tab atas (desktop) + nav bawah (HP) */
     document.querySelectorAll('[data-tab]').forEach(function (b) {
@@ -96,6 +98,7 @@
   /* segarkan tampilan setelah data berubah */
   function segar() {
     if (window.Tasks) Tasks.render();
+    if (window.Notes) Notes.render();
     if (tabAktif === 'folder' && window.Folders) Folders.segarkan();
   }
 
@@ -104,7 +107,13 @@
     return Tasks.muat().then(function () {
       return Folders.muat();
     }).then(function () {
+      return Hero.muat();
+    }).then(function () {
+      return Notes.muat();
+    }).then(function () {
       Folders.tampilkanBeranda();
+      Hero.render();
+      Notes.render();
       segar();
     });
   }
@@ -131,10 +140,18 @@
     Tasks.muat().then(function () {
       return Folders.muat();
     }).then(function () {
+      return Hero.muat();
+    }).then(function () {
+      return Notes.muat();
+    }).then(function () {
       Tasks.render();
       Folders.renderBeranda();
+      Hero.render();
+      Notes.render();
       Tasks.pasangEvent();
       Folders.pasangEvent();
+      Hero.pasangEvent();
+      Notes.pasangEvent();
       pasangEventGlobal();
     }).catch(function (e) {
       console.error(e);
@@ -154,9 +171,11 @@
     });
     document.getElementById('btn-tema').addEventListener('click', gantiTema);
 
-    /* FAB ⊕ (HP): tugas baru di tab Tugas; folder/isi di tab Folder */
+    /* FAB ⊕ (HP): tugas baru di tab Tugas; catatan baru di tab Catatan;
+       folder/isi di tab Folder */
     document.getElementById('btn-fab').addEventListener('click', function () {
       if (tabAktif === 'tugas') { Tasks.bukaForm(null, false); return; }
+      if (tabAktif === 'catatan') { Notes.bukaForm(null); return; }
       if (window.Folders) Folders.fabAksi();
     });
 

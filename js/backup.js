@@ -1,9 +1,12 @@
 /* ============================================================
    backup.js — Export & import backup.
    Export: seluruh data (tugas + foto tugas + folder bertingkat
-   + isi folder termasuk foto & catatan fotonya) dibungkus jadi
-   SATU file JSON yang bisa diunduh.
+   + isi folder termasuk foto & catatan fotonya + foto utama
+   halaman depan + catatan lepas tab Catatan) dibungkus jadi SATU
+   file JSON yang bisa diunduh.
    Import: baca file backup itu, lalu ganti seluruh data saat ini.
+   Backup v4 berisi "notes" (catatan lepas); backup lama v1-v3
+   tidak — catatan saat ini dipertahankan agar tidak hilang.
    ============================================================ */
 (function () {
   'use strict';
@@ -54,7 +57,7 @@
 
   function exportSemua() {
     toast('Menyiapkan backup…');
-    var tasks, folders, items;
+    var tasks, folders, items, pengaturan, notes;
     return DB.semua('tasks').then(function (hasil) {
       tasks = hasil;
       return DB.semua('folders');
@@ -63,6 +66,12 @@
       return DB.semua('items');
     }).then(function (hasil) {
       items = hasil;
+      return DB.semua('pengaturan');
+    }).then(function (hasil) {
+      pengaturan = hasil || [];
+      return DB.semua('notes');
+    }).then(function (hasil) {
+      notes = hasil || [];
       /* foto & file (Blob) diubah ke teks base64 supaya muat di JSON */
       return items.reduce(function (janji, it) {
         return janji.then(function () {
@@ -74,20 +83,46 @@
         });
       }, Promise.resolve());
     }).then(function () {
+      /* foto utama (pengaturan) juga jadi base64 */
+      return pengaturan.reduce(function (janji, p) {
+        return janji.then(function () {
+          if (p.blob instanceof Blob) {
+            return blobKeBase64(p.blob).then(function (b64) {
+              p._data = b64;
+            });
+          }
+        });
+      }, Promise.resolve());
+    }).then(function () {
       var itemsKeluar = items.map(function (it) {
         var salinan = salinObjek(it);
         delete salinan.blob;
         if (it._data) { salinan.data = it._data; delete salinan._data; }
         return salinan;
       });
+      var pengaturanKeluar = pengaturan.map(function (p) {
+        var salinan = salinObjek(p);
+        delete salinan.blob;
+        if (p._data) { salinan.data = p._data; delete salinan._data; }
+        return salinan;
+      });
+      var adaFotoUtama = pengaturanKeluar.some(function (p) { return p.kunci === 'foto-utama'; });
       var paket = {
         app: 'tugas-app',
-        versi: 2,
+        versi: 4,
         waktu: new Date().toISOString(),
-        jumlah: { tugas: tasks.length, folder: folders.length, item: items.length },
+        jumlah: {
+          tugas: tasks.length,
+          folder: folders.length,
+          item: items.length,
+          catatan: notes.length,
+          fotoUtama: adaFotoUtama
+        },
         tasks: tasks,
         folders: folders,
-        items: itemsKeluar
+        items: itemsKeluar,
+        pengaturan: pengaturanKeluar,
+        notes: notes
       };
       var blob = new Blob([JSON.stringify(paket)], { type: 'application/json' });
       var nama = namaFileBackup();
@@ -121,12 +156,24 @@
       var j = paket.jumlah || {
         tugas: paket.tasks.length,
         folder: (paket.folders || []).length,
-        item: (paket.items || []).length
+        item: (paket.items || []).length,
+        catatan: (paket.notes || []).length
       };
+      /* keterangan foto utama di pesan konfirmasi */
+      var punyaPengaturan = Array.isArray(paket.pengaturan);
+      var heroBaru = punyaPengaturan && paket.pengaturan.some(function (p) { return p.kunci === 'foto-utama'; });
+      var teksHero = '';
+      if (heroBaru) teksHero = ', termasuk foto utama';
+      else if (!punyaPengaturan) teksHero = '. Backup lama tanpa foto utama — foto utama saat ini dipertahankan';
+      /* keterangan catatan lepas (tab Catatan) */
+      var punyaNotes = Array.isArray(paket.notes);
+      var teksNotes = punyaNotes ? ', ' + (j.catatan || 0) + ' catatan' : '';
+      if (!punyaNotes) teksNotes = '. Backup lama tanpa catatan — catatan saat ini dipertahankan';
       return konfirmasi({
         judul: 'Pulihkan backup?',
         pesan: 'Seluruh data saat ini akan DIGANTI dengan isi backup (' +
-          j.tugas + ' tugas, ' + j.folder + ' folder, ' + j.item + ' item foto/file/catatan). ' +
+          j.tugas + ' tugas, ' + j.folder + ' folder, ' + j.item + ' item foto/file/catatan' +
+          teksHero + teksNotes + '). ' +
           'Tindakan ini tidak bisa dibatalkan.',
         ya: 'Pulihkan'
       }).then(function (ok) {
@@ -152,6 +199,36 @@
                 return DB.simpan('items', salinan);
               });
             }, Promise.resolve());
+          })
+          .then(function () {
+            /* pengaturan (foto utama): hanya diproses bila backup v3+.
+               Backup lama (v1/v2) tidak berisi pengaturan — foto utama
+               yang sedang terpasang dibiarkan agar tidak ikut hilang. */
+            if (!Array.isArray(paket.pengaturan)) return null;
+            return DB.kosongkan('pengaturan').then(function () {
+              return paket.pengaturan.reduce(function (janji, o) {
+                return janji.then(function () {
+                  var salinan = salinObjek(o);
+                  if (salinan.data) {
+                    return base64KeBlob(salinan.data, salinan.mime).then(function (blob) {
+                      salinan.blob = blob;
+                      delete salinan.data;
+                      return DB.simpan('pengaturan', salinan);
+                    });
+                  }
+                  return DB.simpan('pengaturan', salinan);
+                });
+              }, Promise.resolve());
+            });
+          })
+          .then(function () {
+            /* catatan lepas (tab Catatan): hanya diproses bila backup v4+.
+               Backup lama (v1-v3) tidak berisi notes — catatan yang
+               sudah ada sekarang dibiarkan agar tidak ikut hilang. */
+            if (!Array.isArray(paket.notes)) return null;
+            return DB.kosongkan('notes').then(function () {
+              return DB.simpanBanyak('notes', paket.notes);
+            });
           })
           .then(function () { return App.muatUlang(); })
           .then(function () { toast('Backup berhasil dipulihkan.'); })

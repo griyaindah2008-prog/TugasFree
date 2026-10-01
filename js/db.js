@@ -1,18 +1,23 @@
 /* ============================================================
    db.js — Lapisan penyimpanan IndexedDB.
-   Database "tugas-app" berisi 3 object store:
-   - tasks  : data tugas (keyPath "id"), checklist tertanam di objek
-   - folders: folder bertingkat (keyPath "id", field "parentId"
-              menunjuk ke folder induknya)
-   - items  : isi folder — foto / file / catatan (keyPath "id",
-              index "folderId" untuk ambil isi per folder) dan
-              foto milik tugas (index "taskId")
+   Database "tugas-app" berisi 5 object store:
+   - tasks      : data tugas (keyPath "id"), checklist tertanam di objek
+   - folders    : folder bertingkat (keyPath "id", field "parentId"
+                  menunjuk ke folder induknya)
+   - items      : isi folder — foto / file / catatan (keyPath "id",
+                  index "folderId" untuk ambil isi per folder) dan
+                  foto milik tugas (index "taskId")
+   - pengaturan : pengaturan aplikasi per-kunci (keyPath "kunci"),
+                  dipakai untuk foto utama di halaman depan (mis.
+                  jadwal pelajaran) — kunci "foto-utama"
+   - notes      : catatan lepas milik tab Catatan (keyPath "id") —
+                  judul, isi, pinned (disematkan di atas), createdAt
    ============================================================ */
 (function () {
   'use strict';
 
   var NAMA_DB = 'tugas-app';
-  var VERSI_DB = 2;
+  var VERSI_DB = 4;
   var dbJanji = null;
 
   function bukaDB() {
@@ -40,6 +45,14 @@
           if (!os.indexNames.contains('taskId')) {
             os.createIndex('taskId', 'taskId', { unique: false });
           }
+        }
+        /* v3: pengaturan aplikasi (foto utama halaman depan) */
+        if (!db.objectStoreNames.contains('pengaturan')) {
+          db.createObjectStore('pengaturan', { keyPath: 'kunci' });
+        }
+        /* v4: catatan lepas milik tab Catatan (judul + isi + pin + tanggal dibuat) */
+        if (!db.objectStoreNames.contains('notes')) {
+          db.createObjectStore('notes', { keyPath: 'id' });
         }
       };
       req.onsuccess = function () { selesai(req.result); };

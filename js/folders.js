@@ -48,14 +48,17 @@
   }
 
   /* Kompres foto otomatis: sisi terpanjang dibatasi, dikonversi
-     jadi JPEG berkualitas 82%. Foto yang sudah kecil dibiarkan. */
-  function kompresFoto(berkas) {
+     jadi JPEG berkualitas 82%. Foto yang sudah kecil dibiarkan.
+     `sisiMaks` opsional — mis. foto utama (jadwal) pakai sisi lebih
+     besar supaya tulisan kecil tetap terbaca saat di-zoom. */
+  function kompresFoto(berkas, sisiMaks) {
+    var batas = (typeof sisiMaks === 'number' && sisiMaks > 0) ? sisiMaks : SISI_MAKS_FOTO;
     if (!berkas.type || berkas.type.indexOf('image/') !== 0 || typeof createImageBitmap !== 'function') {
       return Promise.resolve({ blob: berkas, berubah: false });
     }
     return createImageBitmap(berkas).then(function (bitmap) {
       var sisi = Math.max(bitmap.width, bitmap.height);
-      var skala = Math.min(1, SISI_MAKS_FOTO / sisi);
+      var skala = Math.min(1, batas / sisi);
       if (skala === 1 && berkas.size <= BATAS_KECIL) {
         if (bitmap.close) bitmap.close();
         return { blob: berkas, berubah: false };
@@ -89,6 +92,7 @@
     var url = '';
     var segarFn = null;   /* dipanggil setelah catatan foto disimpan */
     var sedangEdit = false;
+    var matikanCatatan = false;  /* true untuk foto tanpa fitur catatan (mis. foto utama) */
 
     /* ---- keadaan zoom ---- */
     var Z = { skala: 1, x: 0, y: 0 };          /* transform aktif */
@@ -96,10 +100,32 @@
     var pointer = {};                           /* pointerId -> posisi terakhir */
     var gesture = null;                         /* pan / pinch yang sedang berjalan */
     var tapWaktu = 0, tapX = 0, tapY = 0;       /* deteksi ketuk dua kali */
+    var sembunyiWaktu = null;                   /* timer pemudar kontrol zoom */
 
     function kotak() { return document.getElementById('lightbox'); }
     function imgEl() { return document.getElementById('lb-img'); }
     function panggungEl() { return document.getElementById('lb-panggung'); }
+    function kontrolEl() { return document.getElementById('lb-zoom'); }
+
+    /* ---------- kontrol zoom: muncul saat ada aktivitas, menyingkir sendiri ----------
+       Kontrol berada di pojok kanan atas dan memudar ±3 detik setelah aktivitas
+       terakhir (sentuhan / gerak mouse / zoom), supaya tidak menutupi foto.
+       Muncul lagi otomatis begitu pengguna melakukan apa pun. */
+
+    function tampilKontrol() {
+      var z = kontrolEl();
+      if (!z) return;
+      z.classList.remove('sembunyi');
+      if (sembunyiWaktu) clearTimeout(sembunyiWaktu);
+      sembunyiWaktu = setTimeout(function () {
+        sembunyiWaktu = null;
+        z.classList.add('sembunyi');
+      }, 3000);
+    }
+
+    function berhentiKontrol() {
+      if (sembunyiWaktu) { clearTimeout(sembunyiWaktu); sembunyiWaktu = null; }
+    }
 
     /* ---------- transform zoom ---------- */
 
@@ -111,6 +137,7 @@
       panggung.classList.toggle('diperbesar', Z.skala > 1.01);
       var tombolReset = document.getElementById('lb-zoom-reset');
       if (tombolReset) tombolReset.disabled = Z.skala <= 1.01;
+      tampilKontrol();   /* ada aksi zoom -> kontrol muncul sebentar lagi */
     }
 
     function resetZoom() {
@@ -156,6 +183,7 @@
     /* ---------- peristiwa pointer (pan & pinch) ---------- */
 
     function saatTurun(e) {
+      tampilKontrol();   /* sentuhan/klik apa pun memunculkan kembali kontrol */
       if (e.target.closest('.lb-zoom') || e.target.closest('.lb-nav')) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       pointer[e.pointerId] = { x: e.clientX, y: e.clientY };
@@ -261,14 +289,16 @@
 
     /* ---------- buka / tampil / tutup ---------- */
 
-    function buka(daftar, i, segar) {
+    function buka(daftar, i, segar, tanpaCatatan) {
       fotos = (daftar || []).filter(function (f) { return f.blob instanceof Blob; });
       if (!fotos.length) return;
       segarFn = typeof segar === 'function' ? segar : null;
+      matikanCatatan = !!tanpaCatatan;
       idx = Math.min(Math.max(i || 0, 0), fotos.length - 1);
       sedangEdit = false;
       document.getElementById('lb-form-catatan').hidden = true;
       kotak().classList.add('buka');
+      kotak().setAttribute('aria-hidden', 'false');
       document.body.classList.add('terkunci');
       tampil();
     }
@@ -284,9 +314,11 @@
       img.alt = f.caption || f.name || 'Foto';
       document.getElementById('lb-nama').textContent = f.name || 'Foto';
       document.getElementById('lb-angka').textContent = (idx + 1) + ' / ' + fotos.length;
+      document.getElementById('lb-angka').hidden = fotos.length < 2;  /* "1 / 1" tidak perlu */
       document.getElementById('lb-prev').hidden = fotos.length < 2;
       document.getElementById('lb-next').hidden = fotos.length < 2;
       resetZoom();
+      tampilKontrol();   /* ganti foto / baru dibuka -> kontrol tampil dulu */
       perbaruiTeksCatatan(f);
     }
 
@@ -296,7 +328,7 @@
       var label = document.getElementById('lb-edit-teks');
       teks.textContent = (f && f.caption) || '';
       teks.hidden = !f || !f.caption || sedangEdit;
-      tombol.hidden = sedangEdit;
+      tombol.hidden = sedangEdit || matikanCatatan;
       tombol.title = (f && f.caption) ? 'Edit catatan foto' : 'Beri catatan foto';
       if (label) label.textContent = (f && f.caption) ? 'Edit catatan' : 'Catat foto';
     }
@@ -344,10 +376,14 @@
       fotos = [];
       segarFn = null;
       sedangEdit = false;
+      matikanCatatan = false;
       gesture = null;
       pointer = {};
+      berhentiKontrol();
+      var z = kontrolEl();
+      if (z) z.classList.remove('sembunyi');   /* siap tampil saat dibuka lagi */
       var k = kotak();
-      if (k) k.classList.remove('buka');
+      if (k) { k.classList.remove('buka'); k.setAttribute('aria-hidden', 'true'); }
       var form = document.getElementById('lb-form-catatan');
       if (form) form.hidden = true;
       if (!document.querySelector('.modal.buka')) document.body.classList.remove('terkunci');
@@ -391,6 +427,21 @@
       document.getElementById('lb-zoom-in').addEventListener('click', zoomMasuk);
       document.getElementById('lb-zoom-out').addEventListener('click', zoomKeluar);
       document.getElementById('lb-zoom-reset').addEventListener('click', resetZoom);
+
+      /* gerak mouse di area foto = aktivitas -> kontrol muncul lagi.
+         Gerak mouse DI ATAS kontrol sendiri diabaikan supaya kursor yang
+         parkir di sana tidak memicu timer penyembunyian lagi. */
+      kotak().addEventListener('mousemove', function (e) {
+        if (e.target.closest && e.target.closest('.lb-zoom')) return;
+        tampilKontrol();
+      });
+
+      /* kursor parkir di atas kontrol: jangan disembunyikan */
+      var z = kontrolEl();
+      if (z) {
+        z.addEventListener('mouseenter', berhentiKontrol);
+        z.addEventListener('mouseleave', tampilKontrol);
+      }
 
       /* catatan foto */
       document.getElementById('lb-edit-btn').addEventListener('click', mulaiEdit);
